@@ -1,0 +1,16 @@
+Source code of the Fracture Point fan MOD set (C#, MelonLoader 0.7.3 / Il2CppInterop / Harmony)
+
+src\FPModOption\   shared core (always on): settings + "MOD" tab, leaderboard blocking, update detection,
+                   weapon lookups / stat pipeline, model loader, test runner. Build this one FIRST
+src\FPRarity\      rarity mod (weapon rarity, mastery, sights, endless boss room, sliding)
+src\FPSurvival\    survival mode mod
+src\FPCustom\      weapon customization mod (attachments)
+src\FPOptimize\    optimization mod
+
+Build: dotnet build -c Release in each folder (FPModOption first). The csproj files reference the game's
+MelonLoader\Il2CppAssemblies (set <GameDir> at the top of each csproj) and the built FPModOption.dll
+(..\..\devmods\FPModOption.dll; change the path if needed). The output goes to ..\..\devmods.
+
+
+*Test*.cs, *Probe*.cs, *Lab*.cs : automatic tests / investigation tools
+  (only active when UserData\FPModOption\autotest or UserData\FPRarity\autotest exists)

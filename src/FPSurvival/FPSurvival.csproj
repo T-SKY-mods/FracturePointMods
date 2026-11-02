@@ -1,0 +1,59 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>FPSurvival</AssemblyName>
+    <RootNamespace>FPSurvival</RootNamespace>
+    <CheckEolTargetFramework>false</CheckEolTargetFramework>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS0618</NoWarn>
+    <GameDir>C:\Program Files (x86)\Steam\steamapps\common\Fracture Point</GameDir>
+    <!-- 配布用: DLL に作成者の PC のフォルダ名（デバッグ情報の場所）を残さない -->
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <PathMap>$(MSBuildProjectDirectory)=.</PathMap>
+    <Deterministic>true</Deterministic>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemDefinitionGroup>
+    <Reference><Private>false</Private></Reference>
+  </ItemDefinitionGroup>
+
+  <ItemGroup>
+    <Reference Include="$(GameDir)\MelonLoader\net6\MelonLoader.dll" />
+    <Reference Include="$(MSBuildProjectDirectory)\..\..\devmods\FPModOption.dll" />
+    <Reference Include="$(GameDir)\MelonLoader\net6\0Harmony.dll" />
+    <Reference Include="$(GameDir)\MelonLoader\net6\Il2CppInterop.Runtime.dll" />
+    <Reference Include="$(GameDir)\MelonLoader\net6\Il2CppInterop.Common.dll" />
+    <Reference Include="$(GameDir)\MelonLoader\Il2CppAssemblies\Il2Cppmscorlib.dll" />
+    <Reference Include="$(GameDir)\MelonLoader\Il2CppAssemblies\Il2CppSystem.dll" />
+    <Reference Include="$(GameDir)\MelonLoader\Il2CppAssemblies\Assembly-CSharp.dll" />
+    <Reference Include="$(GameDir)\MelonLoader\Il2CppAssemblies\Assembly-CSharp-firstpass.dll" />
+    <Reference Include="$(GameDir)\MelonLoader\Il2CppAssemblies\Il2CppFPLeaderboard.Client.dll" />
+    <Reference Include="$(GameDir)\MelonLoader\Il2CppAssemblies\Il2CppDungeonArchitect.Core.dll" />
+    <Reference Include="$(GameDir)\MelonLoader\Il2CppAssemblies\UnityEngine.PhysicsModule.dll" />
+    <Reference Include="$(GameDir)\MelonLoader\Il2CppAssemblies\UnityEngine.AIModule.dll" />
+    <Reference Include="$(GameDir)\MelonLoader\Il2CppAssemblies\Il2CppFPSAnimationFramework.Runtime.dll" />
+    <Reference Include="$(GameDir)\MelonLoader\Il2CppAssemblies\UnityEngine.CoreModule.dll" />
+    <Reference Include="$(GameDir)\MelonLoader\Il2CppAssemblies\Unity.InputSystem.dll" />
+    <Reference Include="$(GameDir)\MelonLoader\Il2CppAssemblies\Unity.TextMeshPro.dll" />
+    <Reference Include="$(GameDir)\MelonLoader\Il2CppAssemblies\UnityEngine.UI.dll" />
+    <Reference Include="$(GameDir)\MelonLoader\Il2CppAssemblies\UnityEngine.UIModule.dll" />
+    <Reference Include="$(GameDir)\MelonLoader\Il2CppAssemblies\UnityEngine.ScreenCaptureModule.dll" />
+    <Reference Include="$(GameDir)\MelonLoader\Il2CppAssemblies\UnityEngine.ImageConversionModule.dll" />
+    <Reference Include="$(GameDir)\MelonLoader\Il2CppAssemblies\UnityEngine.AnimationModule.dll" />
+    <Reference Include="$(GameDir)\MelonLoader\Il2CppAssemblies\UnityEngine.AudioModule.dll" />
+    <Reference Include="$(GameDir)\MelonLoader\Il2CppAssemblies\UnityEngine.ParticleSystemModule.dll" />
+    <Reference Include="$(GameDir)\MelonLoader\Il2CppAssemblies\Unity.RenderPipelines.Core.Runtime.dll" />
+    <Reference Include="$(GameDir)\MelonLoader\Il2CppAssemblies\Unity.RenderPipelines.Universal.Runtime.dll" />
+  </ItemGroup>
+
+  <!-- 開発中はゲームの Mods には置かない。autotest.ps1 -Dev のときだけ一時的に Mods へ入れる -->
+  <Target Name="DeployToGame" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(MSBuildProjectDirectory)\..\..\devmods" />
+  </Target>
+
+</Project>

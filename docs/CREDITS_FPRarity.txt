@@ -1,0 +1,17 @@
+FPRarity Mod - 使用している3Dモデル（すべて Sketchfab の無料モデル、ライセンス: Creative Commons Attribution 4.0 / CC BY 4.0）
+https://creativecommons.org/licenses/by/4.0/
+
+1. "Picatinny Rails - Houdini Generated" by AntijnvanderGun
+   https://sketchfab.com/3d-models/picatinny-rails-houdini-generated-530ada56ac7647dfafa936cd367e5f10
+   ファイル: picatinny_rails.glb（GLB, 2K テクスチャ）
+
+2. "MTK-83 AK Mount" by Johannes Bazaryan (bazaryan3D)（元のモデル: RedRogueXIII / GameBanana）
+   https://sketchfab.com/3d-models/mtk-83-ak-mount-f59b39a4f5f540a284b255a567b8f4fb
+   ファイル: mtk83_ak_mount.glb（GLB, 4K テクスチャ）
+
+3. "Low Poly MP5A4" by samanthacford（クローマウント部分のみ使用）
+   https://sketchfab.com/3d-models/low-poly-mp5a4-1831aae4f8264f3b96e7cff1552cf4d0
+   ファイル: low_poly_mp5a4.glb（GLB, 1K テクスチャ）
+
+Mod 内では、ゲームに合わせて大きさ・位置・向きの調整、部品の切り出し、テクスチャの縮小などの改変を行っています。
+ダウンロード日: 2026-10-18

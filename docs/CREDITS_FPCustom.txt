@@ -1,0 +1,24 @@
+﻿FPCustom Mod - 使用している3Dモデル（すべて Sketchfab の無料モデル、ライセンス: Creative Commons Attribution 4.0 / CC BY 4.0）
+https://creativecommons.org/licenses/by/4.0/
+
+1. "low-poly AK-74M Zenitco" by D_U (@DU1701)（B-10 ハンドガード＋B-19 のみ使用）
+   https://sketchfab.com/3d-models/low-poly-ak-74m-zenitco-35ad8e37a513453cbbbd04064fa5fb79
+
+2. "Low-Poly Mk18/CQBR parts collection" by notcplkerry（RIS II ハンドガード・KAC QDSS サプレッサーのみ使用）
+   https://sketchfab.com/3d-models/low-poly-mk18cqbr-parts-collection-4a838877f8d44225a6d52c14b1792b68
+
+3. "Low-Poly AK "Hexagon" Handguard." by notcplkerry（取り付けレールのみ使用）
+   https://sketchfab.com/3d-models/low-poly-ak-hexagon-handguard-11f11546b0774b4092a22bed3c4b1842
+
+4. "Low-Poly Magpul AFG" by notcplkerry
+   https://sketchfab.com/3d-models/low-poly-magpul-afg-a92a52cbb5854f7c8e33507f579073f7
+
+5. "Colt M1911 - Recoil Compensator" by Coozy (@GameDevNick)（コンペンセイターのみ使用）
+   https://sketchfab.com/3d-models/colt-m1911-recoil-compensator-895e01e4691d4eadb6610ec638de59d2
+
+6. "Firearms_Kit _1.0 (CC0)" by britdawgmasterfunk（バイポッド・グリップ 2 種・フラッシュコーン・アローヘッドブレーキ・フラッシュハイダーのみ使用。作者により CC0。Sketchfab の表示は CC BY）
+   https://sketchfab.com/3d-models/firearms-kit-10-cc0-386f0582c28d4dff96da967f42ba20f7
+
+ハンドガンの折りたたみストック（93R 型）と、ハンドガンのアローヘッドブレーキ・リニアコンペンセイター・フラッシュハイダーは Mod の作者が作った形です（上のモデルは使っていません）。
+Mod 内では、ゲームに合わせて大きさ・位置・向き・色の調整、部品の切り出し、テクスチャの縮小などの改変を行っています。
+ダウンロード日: 2026-10-26（6 は 2026-11-01）

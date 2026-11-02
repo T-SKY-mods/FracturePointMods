@@ -1,0 +1,8 @@
+bin/
+obj/
+devmods/
+*.dll
+*.pdb
+*.zip
+*.user
+.vs/
