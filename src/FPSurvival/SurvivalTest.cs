@@ -56,6 +56,8 @@ namespace FPSurvival
                             Core.Log($"[survtest] moving {w.Item.GetName()} to the stash for the test");
                             Refs.Bag.MoveWeaponToStash(w.Item);
                         }
+                    // 拡張マガジンを付けて始め、渡されたマガジンが拡張マガジンの大きさで満タンかを見る（武器カスタマイズmod があるとき）
+                    Link.ExtMagsForTest?.Invoke(true);
                 }),
                 ("wait", () => { }),
                 ("before", () =>
@@ -132,9 +134,17 @@ namespace FPSurvival
                 Check($"no loot ({Count(inv.LootItems)})", Count(inv.LootItems) == 0);
                 Core.Log($"[survtest] heals at the run start (the game gives 1; removed on the rooftop): {Count(inv.HealthItems)}");
                 // ゲームがエンドレス開始で渡す武器（と空のマガジン）は屋上で取り上げるので、ここでは数えない
-                int mags = 0; bool full = true;
-                foreach (var m in inv.MagStored) if (m != null && Stash.Pending.Snap.Mags.Any(e => e.Weapon == m.WeaponName)) { mags++; if (m.AmmoCount != m.MaxAmmoCount) full = false; }
-                Check($"{Survival.StartMags} full mags per weapon (mags={mags})", mags == Survival.StartMags * _heldBefore && full);
+                int mags = 0; bool full = true, ext = true; var seen = new List<string>();
+                foreach (var m in inv.MagStored) if (m != null && Stash.Pending.Snap.Mags.Any(e => e.Weapon == m.WeaponName))
+                {
+                    mags++; if (m.AmmoCount != m.MaxAmmoCount) full = false;
+                    int baseCap = 0;
+                    foreach (var d in inv.MagData.Mags) if (d != null && d.Index == m.Index) baseCap = d.MaxAmmoCount;
+                    if (Link.ExtMagsForTest != null && m.MaxAmmoCount <= baseCap) ext = false;
+                    seen.Add($"{m.AmmoCount}/{m.MaxAmmoCount}(base {baseCap})");
+                }
+                Check($"{Survival.StartMags} full mags per weapon (mags={mags}: {string.Join(" ", seen.Distinct())})", mags == Survival.StartMags * _heldBefore && full);
+                Check($"extended mags start full at the extended size", ext);
                 bool ammo = true;
                 foreach (var kv in inv.AmmoStored) if (kv.Value != 0 && kv.Value % Survival.StartAmmo != 0) ammo = false;
                 Check("250 rounds per weapon", ammo);

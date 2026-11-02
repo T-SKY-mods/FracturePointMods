@@ -165,6 +165,13 @@ namespace FPCustom
             AdsSpeed.ExtraErgo = id => Deltas(id).Ergo + (Has(id, "stubby_grip") && Moving() ? StubbyMoveErgo : 0f);   // スタビーグリップ：歩く・走る・スライディング中は構えが速い
             Link.RpmShown = (id, rpm) => (Has(id, "p_stock") && Catalog.IsPistol(id) ? (id == G18C ? rpm * G18Rate : StockRpm) : rpm) * (Has(id, "flash_cone") ? BoosterRate : 1f);
             Link.DamageShown = (id, dmg) => dmg + DamageAdd(id);
+            Link.SyncMags = SyncMags;
+            Link.ExtMagsForTest = on =>
+            {
+                for (int i = 0; i < 64; i++)
+                    if (Tracker.ItemById(i) != null && Catalog.Eligible(Tracker.ItemById(i))) Store.SetForTest(i, Cat.Mag, on ? (Catalog.IsPistol(i) ? "p_ext_mag" : "ext_mag") : null);
+                SyncMags();
+            };
             Link.MobileOverride = () =>
             {
                 // 毎フレーム聞かれるので、持ち替え・付け外しがあったとき（念のため 30 フレームごとにも）だけ調べ直す

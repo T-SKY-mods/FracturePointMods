@@ -129,6 +129,8 @@ namespace FPSurvival
                 if (cal > 0f) inv.AddAmmo(cal, StartAmmo);
                 else Main.Log($"[start] caliber unknown for {w.Item.GetName()}");
             }
+            // 拡張マガジンを付けた武器は、マガジンを大きくしてから満タンにする（先に満たすと元の大きさの弾数のまま始まる）
+            try { Link.SyncMags?.Invoke(); } catch (System.Exception e) { Main.Log("[start] mag sync failed: " + e.Message); }
             foreach (var m in inv.MagStored) if (m != null) m.AmmoCount = m.MaxAmmoCount;
             Main.Log("[start] loadout: " + Stash.Describe(Stash.Take(inv)));
         }

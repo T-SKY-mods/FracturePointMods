@@ -66,6 +66,10 @@ namespace FPModOption
         public static Func<int, float, float> RpmShown;
         // 表示するダメージ（リニアコンペンセイターの +15% など）。武器 ID, 元の値 → 表示する値
         public static Func<int, float, float> DamageShown;
+        // マガジンの大きさを付けているアタッチメント（拡張マガジン）に合わせる。サバイバルで渡したマガジンを満タンにする前に呼ぶ
+        public static Action SyncMags;
+        // テスト用：持っている全武器に拡張マガジンを付ける（true）／外す（false）
+        public static Action<bool> ExtMagsForTest;
         // ハンドガンの動きを付ける（true）・外す（false）・そのまま（null）
         public static Func<bool?> MobileOverride;
         // カスタマイズの画面が開いているか（開いている間は保管庫の性能のポップアップを出さない）
