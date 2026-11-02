@@ -31,8 +31,8 @@ Five mods in one package. Install once, then turn each mod on or off in **Settin
 
 ### Weapon customization mod (FPCustom)
 - Add and remove attachments on the "CUSTOMIZE" page of the stash
-  - **Rifles / SMGs / shotguns**: muzzle (suppressor, muzzle brake, arrowhead brake, flash cone, flash hider), grip (vertical, angled, KAC, stubby, bipod), sight, laser (red, blue, green), magazine (extended, fast mag)
-  - **Handguns**: muzzle (suppressor, compensator, arrowhead brake, linear compensator, flash hider), M93R stock, RMR, laser (red, blue, green), magazine
+  - **Rifles / SMGs / shotguns**: 20 attachments (muzzle 5, grip 5, sight 5, laser 3, magazine 2)
+  - **Handguns**: 12 attachments (muzzle 5, stock 1, sight 1, laser 3, magazine 2)
 - Unlock attachments with "Broken Weapon Parts" (per weapon type)
 - Each attachment has its own effect: recoil, ergonomics, reload, fire rate, damage and more
 - Slide changes: while sliding, 70% of enemy bullets miss you. Handguns slide about 5m and can aim and fire while sliding
@@ -78,8 +78,8 @@ Details: `README.txt` in the zip.
 
 ### 武器カスタマイズmod（FPCustom）
 - 保管庫の「カスタマイズ」ページで、武器にアタッチメントを付け外しできます
-  - **ライフル・SMG・ショットガン**: マズル（サプレッサー・マズルブレーキ・アローヘッドブレーキ・フラッシュコーン・フラッシュハイダー）、グリップ（バーティカル・アングル・KAC・スタビー・バイポッド）、サイト、レーザー（赤・青・緑）、マガジン（拡張マガジン・ファストマグ）
-  - **ハンドガン**: マズル（サプレッサー・コンペンセイター・アローヘッドブレーキ・リニアコンペンセイター・フラッシュハイダー）、M93R ストック、RMR、レーザー（赤・青・緑）、マガジン
+  - **ライフル・SMG・ショットガン**: 20 種類（マズル 5・グリップ 5・サイト 5・レーザー 3・マガジン 2）
+  - **ハンドガン**: 12 種類（マズル 5・ストック 1・サイト 1・レーザー 3・マガジン 2）
 - 解放には「壊れた武器部品」が必要です（武器の種類ごと）
 - アタッチメントごとに効果があります（反動・エルゴ・リロード・連射速度・ダメージなど）
 - スライディングの調整: スライディング中は敵の弾を 70% の確率で受けません。ハンドガンは約 5m 滑り、滑りながらエイム射撃できます
