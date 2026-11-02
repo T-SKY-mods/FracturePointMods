@@ -46,10 +46,8 @@ Japanese: README_JA.txt
 
   [Weapon customization mod] (FPCustom)
     - Add and remove attachments on the "CUSTOMIZE" page of the stash
-      Rifles / SMGs / shotguns: muzzle (suppressor, muzzle brake, arrowhead brake, flash cone, flash hider),
-      grip (vertical, angled, KAC, stubby, bipod), sight, laser (red, blue, green), magazine (extended, fast mag)
-      Handguns: muzzle (suppressor, compensator, arrowhead brake, linear compensator, flash hider),
-      M93R stock, RMR, laser (red, blue, green), magazine
+      Rifles / SMGs / shotguns: 20 attachments (muzzle 5, grip 5, sight 5, laser 3, magazine 2)
+      Handguns: 12 attachments (muzzle 5, stock 1, sight 1, laser 3, magazine 2)
     - Unlocking needs "Broken Weapon Parts" (per weapon type)
     - Each attachment changes stats such as recoil, ergonomics and reload
     - Slide changes
