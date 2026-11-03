@@ -1,4 +1,4 @@
-﻿Fracture Point fan MOD set 1.1.1
+﻿Fracture Point fan MOD set 1.1.2
 =====================================
 
 Game : Steam build 25787540 / Mod loader: MelonLoader 0.7.3

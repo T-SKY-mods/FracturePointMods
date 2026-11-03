@@ -47,6 +47,32 @@ namespace FPCustom
                 }
                 return s;
             };
+            // レーザーの先の点の中身（色を替えたあと、何が赤のまま残るか）
+            TestMode.ExternalScenarios["custdot"] = () =>
+            {
+                // 点（LaserPoint）はランの中にしかないので、持っている武器すべてに緑のレーザーを付けてエンドレスに出る
+                var s = new List<(string, Action)>
+                {
+                    ("set", () =>
+                    {
+                        Directory.CreateDirectory(ShotDir);
+                        for (int i = 0; i < 64; i++) if (Tracker.ItemById(i) is { } wi && Catalog.Eligible(wi)) Store.SetForTest(i, Cat.SideRail, Catalog.IsPistol(i) ? "p_laser_green" : "laser_green");
+                        Tracker.ApplyAll();
+                    }),
+                    ("start endless run", () => Core.FindAll<Il2Cpp.ButtonStartEndlessMode>().FirstOrDefault()?.StartEndlessRun()),
+                };
+                for (int i = 0; i < 16; i++) s.Add(("wait load", () => { }));
+                s.Add(("dot", () => { DumpDot(Weapons.IdOf(Active()), "laser_green"); ScreenCapture.CaptureScreenshot(Path.Combine(ShotDir, "dot_run.png")); }));
+                s.Add(("wait", () => { }));
+                s.Add(("dot again", () =>
+                {
+                    DumpDot(Weapons.IdOf(Active()), "laser_green");
+                    var lights = new List<Light>();
+                    foreach (var p in UnityEngine.Object.FindObjectsOfType<Il2Cpp.LaserPoint>(true)) foreach (var l in p.GetComponentsInChildren<Light>(true)) lights.Add(l);
+                    Check($"laser dot light is green in the run ({string.Join(" ", lights.Select(l => l.color.ToString()))})", lights.Count > 0 && lights.All(l => l.color.g > 0.5f && l.color.r < 0.3f));
+                }));
+                return s;
+            };
             TestMode.ExternalScenarios["custpmuz"] = () => AllMuzzles(true);    // ハンドガン全部 × 銃口の部品（横から）
             TestMode.ExternalScenarios["custrmuz"] = () => AllMuzzles(false);   // メイン武器全部 × 銃口の部品（横から）
             // Type 89 にフラッシュコーンを付けて持つ（動くメッシュの差し替えの確認）
@@ -94,6 +120,23 @@ namespace FPCustom
 
         static float _rate0;
         static float _scaleStand;
+
+        static void DumpDot(int id, string g)
+        {
+            static string Path(Transform t) { var p = t.name; while (t.parent != null) { t = t.parent; p = t.name + "/" + p; } return p; }
+            void One(Transform t, string why)
+            {
+                if (t == null) { Main.Log($"[dot] {why}: null"); return; }
+                Main.Log($"[dot] {why}: '{Path(t)}' active={t.gameObject.activeInHierarchy} comps=[{string.Join(",", t.GetComponents<Component>().Select(c => c.GetIl2CppType().Name))}]");
+                foreach (var r in t.GetComponentsInChildren<Renderer>(true)) Main.Log($"[dot]   renderer '{r.name}' {r.GetIl2CppType().Name} on={r.enabled && r.gameObject.activeInHierarchy}: {LaserLab.Describe(r)}");
+                foreach (var l in t.GetComponentsInChildren<Light>(true)) Main.Log($"[dot]   light '{l.name}' color={l.color} on={l.enabled}");
+                foreach (var ps in t.GetComponentsInChildren<ParticleSystem>(true)) Main.Log($"[dot]   particles '{ps.name}' start={ps.main.startColor.color}");
+                foreach (var d in t.GetComponentsInChildren<UnityEngine.Rendering.Universal.DecalProjector>(true)) Main.Log($"[dot]   decal '{d.name}' mat={d.material?.name}");
+            }
+            Main.Log($"[dot] weapon {id} {g} held={Weapons.IdOf(Active())}");
+            foreach (var c in Active().GetComponentsInChildren<Il2Cpp.LaserPointController>(true)) One(c.laserPoint, "controller point");
+            foreach (var p in UnityEngine.Object.FindObjectsOfType<Il2Cpp.LaserPoint>(true)) One(p.transform, "LaserPoint");
+        }
 
         static List<(string, Action)> Steps()
         {

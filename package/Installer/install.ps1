@@ -19,7 +19,7 @@ $Models    = 'FPRarity', 'FPCustom'
 
 . (Join-Path $PSScriptRoot 'common.ps1')
 
-Write-Host 'Fracture Point MODs 1.1.1 installer' -ForegroundColor White
+Write-Host 'Fracture Point MODs 1.1.2 installer' -ForegroundColor White
 
 # --- 1. game folder ---
 $GameDir = Resolve-GameDir $GameDir

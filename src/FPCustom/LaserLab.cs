@@ -205,6 +205,7 @@ namespace FPCustom
         static readonly Dictionary<(IntPtr, int), Material> _tinted = new();
         static readonly Dictionary<IntPtr, Material> _original = new();                  // 替えた材質 → 元の材質
         static readonly Dictionary<IntPtr, (Color, Color)> _lineColors = new();         // 光線の元の色（頂点の色）
+        static readonly Dictionary<IntPtr, Color> _lightColors = new();                 // 先の点の元の色（点は赤いライト）
 
         static Color Hue(Color c, Color to)
         {
@@ -267,7 +268,15 @@ namespace FPCustom
             _dotId = activeId; _dotVersion = Store.Version; _dotNext = Time.unscaledTime + 1f;   // 場面が替わると点も作り直されるので、ときどき見直す
             var beam = activeId >= 0 ? Store.Equipped(activeId, Cat.SideRail)?.Beam : null;
             foreach (var dot in UnityEngine.Object.FindObjectsOfType<LaserPoint>(true))
+            {
                 foreach (var r in dot.GetComponentsInChildren<Renderer>(true)) TintRenderer(r, beam);
+                // ランの中の点は Renderer ではなく赤い Light（壁を照らして点に見える）
+                foreach (var l in dot.GetComponentsInChildren<Light>(true))
+                {
+                    if (!_lightColors.TryGetValue(l.Pointer, out var lc)) _lightColors[l.Pointer] = lc = l.color;
+                    l.color = beam is Color c ? Hue(lc, c) : lc;
+                }
+            }
         }
 
         // テスト用：光線・点の今の色（材質の色と頂点の色）
