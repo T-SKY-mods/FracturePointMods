@@ -20,7 +20,7 @@ namespace FPRarity
         static void Check(string what, bool ok) => Main.Log($"[test] CHECK {what}: {(ok ? "PASS" : "FAIL")}");
 
         static int _gunId = -1;
-        static float _expect;
+        static float _expect, _pitch0;
 
         public static List<(string, Action)> Steps()
         {
@@ -30,9 +30,17 @@ namespace FPRarity
                 ("equip primary", () => Equip(WeaponItem.SlotType.Big)),
             };
             Wait(s, 2);
-            s.Add(("reload primary", () => Reload(expectSpeed: 1f)));
+            // メイン武器は個別調整（Hunter のリロード）の分だけ速い。それ以外はバニラの速さ
+            s.Add(("reload timing guard", () =>
+            {
+                // 初めてのリロードで本体の定数を読むと 0.1 秒ほど止まる。起動時に読んであること
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                _ = ReloadSpeed.Factor; FPModOption.ReloadSound.Volume();
+                Check($"reload constants already read at startup ({sw.Elapsed.TotalMilliseconds:0.00} ms)", sw.Elapsed.TotalMilliseconds < 1.0);
+            }));
+            s.Add(("reload primary", () => Reload(expectSpeed: Mastery.ReloadMult(Tracker.RollFor(Active())))));
             Wait(s, 4);
-            s.Add(("primary timing", () => Measure("primary (vanilla)")));
+            s.Add(("primary timing", () => Measure("primary (vanilla or tuned)")));
             s.Add(("equip handgun", () => Equip(WeaponItem.SlotType.Small)));
             Wait(s, 2);
             s.Add(("labels", () =>
@@ -55,12 +63,58 @@ namespace FPRarity
                 Mastery.Reset(_gunId);
                 for (int i = 0; i < 10; i++) Mastery.AddPoint(_gunId, WeaponStat.FireRate);
                 var roll = Tracker.RollFor(Active());
-                Check($"reload x{Mastery.ReloadMult(roll):0.00} = roll x{roll?.ReloadMult:0.00} * 1.20", roll != null && Math.Abs(Mastery.ReloadMult(roll) - roll.ReloadMult * 1.2f) < 0.001f);
+                Check($"reload x{Mastery.ReloadMult(roll):0.00} = roll x{roll?.ReloadMult:0.00} * 1.20", roll != null && Math.Abs(Mastery.ReloadMult(roll) / RarityTable.ReloadBonus(roll.WeaponId, roll.Tier) - roll.ReloadMult * 1.2f) < 0.001f);
                 Check($"summary '{Mastery.Summary(_gunId)}'", Mastery.Summary(_gunId).Contains("+20%"));
             }));
             s.Add(("reload handgun (mastery)", () => Reload(expectSpeed: Mastery.ReloadMult(Tracker.RollFor(Active())))));
             Wait(s, 4);
             s.Add(("mastery timing", () => Measure("handgun (roll x mastery)")));
+            // メイン武器の個別調整：Hunter-12 のリロードが表どおりに速くなるか
+            const int hunter = 19;
+            s.Add(("add hunter", () =>
+            {
+                if (!Tracker.Held.Any(h => h.Roll.WeaponId == hunter))
+                {
+                    // メイン武器の枠が埋まっていると手に持てないので、ほかのメイン武器は倉庫へ（セーブはテスト後に戻る）
+                    foreach (var h in Tracker.Held.ToList())
+                        if (Tracker.ItemById(h.Roll.WeaponId) is { } wi && wi.Type == WeaponItem.SlotType.Big) TestMode.Call(Refs.Bag, "MoveWeaponToStash", wi);
+                    TestMode.Call(Tracker.Inv, "AddWeapon", Tracker.ItemById(hunter));
+                }
+                Tracker.Inv.AddMag(hunter);   // 予備のマガジンが無いとリロードしない
+                foreach (var m in Tracker.Inv.MagStored) if (m != null) { Main.Log($"[reloadtest] mag {m.WeaponName} {m.AmmoCount}/{m.MaxAmmoCount}"); if (m.WeaponName == Tracker.ItemById(hunter).GetName()) m.AmmoCount = m.MaxAmmoCount; }
+            }));
+            s.Add(("equip hunter", () =>
+            {
+                var name = Tracker.ItemById(hunter).Weapon.gameObject.name;
+                var inst = Refs.Fps.InstantiatedWeapons;
+                for (int i = 0; i < inst.Count; i++)
+                    if (inst[i] != null && inst[i].gameObject.name.Replace("(Clone)", "").Trim() == name) { Refs.Fps.StartWeaponChange(i); return; }
+                Check("hunter in hand", false);
+            }));
+            Wait(s, 2);
+            s.Add(("reload hunter", () =>
+            {
+                var roll = Tracker.RollFor(Active());
+                Check($"hunter reload x{Mastery.ReloadMult(roll):0.00} is the {roll?.Tier} value", roll != null && roll.WeaponId == hunter && Mastery.ReloadMult(roll) >= 2f);
+                var a = Active()?.ReloadAudio;
+                float p0 = a?.pitch ?? -1f;
+                Reload(expectSpeed: Mastery.ReloadMult(roll));
+                var t = FPModOption.ReloadSound.LastForTest;
+                float mult = Mastery.ReloadMult(roll);
+                var w = Active();
+                Main.Log($"[reloadtest] sound '{t.clip}' {t.origLen:0.00}s -> {t.newLen:0.00}s, {t.sounds} sounds, playing {a?.isPlaying}");
+                Check($"reload sound built quickly ({FPModOption.ReloadSound.LastBuildMs:0.0} ms, cached = 0)", FPModOption.ReloadSound.LastBuildMs < 10.0);
+                Check($"hunter reload sound pitch kept ({p0:0.00} -> {a?.pitch:0.00})", a != null && Math.Abs(a.pitch - p0) < 0.01f);
+                Check($"hunter reload sound shortened to the animation ({t.origLen:0.00}s -> {t.newLen:0.00}s, x{mult:0.00})", a != null && a.isPlaying && w != null && t.clip == w.ReloadClip?.name && t.newLen > 0f && t.newLen < t.origLen - 0.05f);
+                _pitch0 = p0;
+            }));
+            Wait(s, 3);
+            s.Add(("hunter timing", () =>
+            {
+                Measure("hunter (table)");
+                var a = Active()?.ReloadAudio;
+                Check($"reload sound pitch unchanged after the reload ({a?.pitch:0.00})", a != null && Math.Abs(a.pitch - _pitch0) < 0.01f);
+            }));
             return s;
         }
 

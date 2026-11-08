@@ -14,6 +14,13 @@ namespace FPCustom
     //   ・効果：連射速度（フラッシュコーン）、しゃがみ中の反動（バイポッド）、腕・脚の倍率（アローヘッドブレーキ）、リーンの手ぶれ（取り付けの確認）
     public static class NewPartsTest
     {
+        // 持っている武器すべてにレーザー（FPRarity の perffight からも呼ぶ）
+        public static void LaserAll(string rifle, string pistol)
+        {
+            for (int i = 0; i < 64; i++) if (Tracker.ItemById(i) is { } wi && Catalog.Eligible(wi)) Store.SetForTest(i, Cat.SideRail, Catalog.IsPistol(i) ? pistol : rifle);
+            Tracker.ApplyAll();
+        }
+
         static string ShotDir => Path.Combine(Main.Dir, "shots");
         static void Check(string what, bool ok) => Main.Log($"[test] CHECK {what}: {(ok ? "PASS" : "FAIL")}");
         static DemoWeapon Active() => Refs.Fps?.GetActiveItem()?.gameObject?.GetComponent<DemoWeapon>();

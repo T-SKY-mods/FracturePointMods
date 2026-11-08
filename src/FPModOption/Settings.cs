@@ -12,13 +12,14 @@ namespace FPModOption
     {
         public string Id, NameJa, NameEn, DescJa, DescEn;
         public string Parent;   // Mod の中の機能（親の Mod の下に並べる。親がオフなら機能もオフ）
+        public bool OffAtFirst;   // 初めての起動ではオフ（自分でオンにする Mod）
         public string Name => Core.Ja ? NameJa : NameEn;
         public string Desc => Core.Ja ? DescJa : DescEn;
     }
 
     // Mod ごとのオン/オフ（UserData/FPModOption/settings.json）。
     //   切り替えはすぐ保存し、次の起動から反映する（起動中のオン/オフは起動時の値のまま）。
-    //   初めての起動ではすべてオン。オフにしても各 Mod のデータ（ロール・熟練度・アタッチメント）は消さない
+    //   初めての起動ではすべてオン（OffAtFirst の Mod だけオフ。自動テストではオン）。オフにしても各 Mod のデータ（ロール・熟練度・アタッチメント）は消さない
     public static class Settings
     {
         public static readonly ModEntry[] Known =
@@ -41,6 +42,9 @@ namespace FPModOption
             new() { Id = "FPSurvival", NameJa = "サバイバルモードmod", NameEn = "Survival mode mod",
                     DescJa = "エンドレス端末から、屋上で敵のウェーブを倒し続けるサバイバルモードを遊べる。途中でやめた回の預かり品は、オフにしても消えず、オンに戻して拠点に入ると返る。",
                     DescEn = "Play survival from the endless terminal: fight waves of enemies on the rooftop. Items kept from an unfinished run are not lost when turned off: turn it on and enter your room to get them back." },
+            new() { Id = "FPHitMarker", OffAtFirst = true, NameJa = "ヒットマーカーmod", NameEn = "Hit marker mod",
+                    DescJa = "敵に弾が当たると、画面の中央に印を出す。頭は二重、倒すと赤、ダメージが減る腕や手は青。",
+                    DescEn = "Shows a marker in the middle of the screen when your bullets hit an enemy. Double for headshots, red for kills, blue for arms and hands that take less damage." },
             new() { Id = "FPOptimize", NameJa = "最適化mod", NameEn = "Optimization mod",
                     DescJa = "ゲームの動きは変えずに、無駄な処理を減らして動作を軽くする。",
                     DescEn = "Cuts wasted work to make the game run smoother without changing how it plays." },
@@ -59,7 +63,7 @@ namespace FPModOption
                     _saved = JsonSerializer.Deserialize<Dictionary<string, bool>>(File.ReadAllText(FilePath)) ?? new();
             }
             catch (Exception e) { Core.Log("[settings] read failed (all mods on): " + e.Message); _saved = new(); }
-            foreach (var m in Known) _atStart[m.Id] = !_saved.TryGetValue(m.Id, out var on) || on;
+            foreach (var m in Known) _atStart[m.Id] = Wanted(m.Id);
             foreach (var id in TestMode.ModsOff) { _testOff.Add(id); _atStart[id] = false; }
             Core.Log("[settings] " + string.Join(", ", Known.Select(m => $"{m.Id}={(Enabled(m.Id) ? "on" : "off")}{(Installed(m.Id) ? "" : "(not installed)")}"))
                      + (_testOff.Count > 0 ? $" (test off: {string.Join(",", _testOff)})" : ""));
@@ -71,11 +75,15 @@ namespace FPModOption
             if (GameVersion.Disabled) return false;
             var parent = Known.FirstOrDefault(m => m.Id == id)?.Parent;
             if (parent != null && !Enabled(parent)) return false;
-            return !_atStart.TryGetValue(id, out var on) || on;
+            return _atStart.TryGetValue(id, out var on) ? on : OnAtFirst(id);
         }
 
         // 次の起動での値（タブのスイッチの状態）
-        public static bool Wanted(string id) => !_saved.TryGetValue(id, out var on) || on;
+        public static bool Wanted(string id) => _saved.TryGetValue(id, out var on) ? on : OnAtFirst(id);
+
+        // まだ切り替えていない Mod の値
+        public static bool OnAtFirst(string id) => TestMode.Active || OnAtFirstForPlayers(id);
+        public static bool OnAtFirstForPlayers(string id) => Known.FirstOrDefault(m => m.Id == id)?.OffAtFirst != true;
 
         public static void Set(string id, bool on)
         {

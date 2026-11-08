@@ -28,6 +28,7 @@ Five mods in one package. Install once, then turn each mod on or off in **Settin
 - Start it from the endless-mode terminal in your room. Escape through the emergency exit during a break to keep the money, crate weapons and Broken Weapon Parts you earned
 - You never lose what you brought in (if you go down, only that run's pickups and money are lost)
 - The lighter your loadout, the better the crate rewards tend to be
+- Hard mode: pick it on the terminal before you start. Enemies start at wave 40 strength and crate rewards get better sooner (separate best record)
 
 ### Weapon customization mod (FPCustom)
 - Add and remove attachments on the "CUSTOMIZE" page of the stash
@@ -75,6 +76,7 @@ Details: `README.txt` in the zip.
 - 拠点のエンドレスモードの端末から始めます。休憩中に非常口から脱出すると、稼いだお金・武器箱の武器・壊れた武器部品を持ち帰れます
 - 倒れても持ち込んだ物は失いません（その回に拾った物と稼いだお金はなくなります）
 - 持ち込む装備を絞るほど、武器箱から良い報酬が出やすくなります
+- ハードモード: 始める前に端末で選べます。ウェーブ 40 の強さの敵から始まり、武器箱の報酬も早く良くなります（記録はノーマルとは別）
 
 ### 武器カスタマイズmod（FPCustom）
 - 保管庫の「カスタマイズ」ページで、武器にアタッチメントを付け外しできます

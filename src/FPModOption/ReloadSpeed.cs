@@ -34,6 +34,10 @@ namespace FPModOption
             P("OnReload", nameof(OnReload_Pre), nameof(OnReload_Post));
             P("OnActionEnded", null, nameof(ActionEnded_Post));
             P("OnUnEquip", nameof(UnEquip_Pre), null);
+            // 本体の定数は起動時に読んでおく（初めてのリロードで読むと一瞬止まる）
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            _ = Factor; ReloadSound.Volume();
+            Core.Log($"[reload] constants read in {sw.Elapsed.TotalMilliseconds:0.0} ms");
         }
 
         static void Safe(Action a) { try { a(); } catch (Exception e) { Core.Log("[reload] ERROR " + e); } }
@@ -89,6 +93,9 @@ namespace FPModOption
             _active = w;
             _activeClip = played;
             SetAnimSpeed(w, played, m);
+            // リロードの音は高さを変えずに、中の音の時刻を詰めて動きと合わせる
+            try { ReloadSound.Start(w, m); }
+            catch (Exception e) { Core.Log("[reload] audio: " + e.Message); }
             LastForTest = (vanilla, delay, m);
             Core.Log($"[reload] {w.name} {(_empty ? "empty " : "")}reload x{m:0.00}: {vanilla:0.00}s -> {delay:0.00}s");
         }

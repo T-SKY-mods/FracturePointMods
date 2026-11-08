@@ -20,6 +20,14 @@ namespace FPModOption
         {
             var sp = Core.FindAll<LootSpawnPoint>().Where(p => p != null).GroupBy(p => p.loot != null ? p.loot.name : "-").Select(g => $"{g.Key}x{g.Count()}");
             var ch = Core.FindAll<LootableChanceItems>().Where(p => p != null).GroupBy(p => (p.loot != null ? p.loot.name : "-") + "/" + p.Name).Select(g => $"{g.Key}x{g.Count()}");
+            // 階に出ている武器：敵が持っている物（倒すと拾える）と、それ以外（床などに落ちている物）
+            var names = new Dictionary<int, string>();
+            var ws = Refs.Inv?.WeaponData?.Weapons;
+            for (int i = 0; ws != null && i < ws.Count; i++) if (ws[i] != null) names[ws[i].Id] = ws[i].GetName();
+            foreach (var g in Core.FindAll<LootableItem>().Where(i => i != null && i.gameObject.scene.IsValid() && i.ItemType == LootableItem.LootType.Weapon)
+                                  .GroupBy(i => i.GetComponentInParent<Il2CppEnemyAI.EnemyHealth>(true) != null || i.transform.root.GetComponentInChildren<Il2CppEnemyAI.EnemyHealth>(true) != null))
+                Core.Log($"[loot] weapons in the floor ({(g.Key ? "held by enemies" : "world")}): {g.Count()} = " +
+                         string.Join(", ", g.GroupBy(i => names.TryGetValue(i.ItemId, out var n) ? n : "#" + i.ItemId).OrderByDescending(x => x.Count()).Select(x => $"{x.Key}x{x.Count()}")));
             Core.Log($"[loot] spawn points: {string.Join(", ", sp)} | containers: {string.Join(", ", ch)} | floor={PlayerPrefs.GetInt("currentFloor", 1)}");
         }
 

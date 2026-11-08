@@ -9,6 +9,9 @@ namespace FPOptimize
     // 敵が攻撃状態に入るたび（AttackAction.OnEnableAction）、ゲームは Unity の FindAnyObjectByType で
     // シーン全体（非表示のものも含む）からプレイヤー（FPSController）を探し直している。敵が多いと 1 秒に何十回も呼ばれて重い。
     //
+    // 地面の物にカーソルを合わせている間も、ゲームはツールチップの文章を作るたび（毎フレーム）に
+    // 表示中のものだけ（Exclude）で同じ検索をしていて、1 回 約 6ms かかる。
+    //
     // シーン内のプレイヤー（FPSController）がちょうど 1 つのときは、探しても必ず同じものが返るので、
     // 見つけたものを覚えておいて返す。0 個や 2 個以上のとき・壊れたとき・新しく作られたときは元の検索をそのまま行う。
     public static class PlayerCache
@@ -53,7 +56,7 @@ namespace FPOptimize
 
         static bool FindPre(Il2CppSystem.Type type, FindObjectsInactive findObjectsInactive, ref Object __result)
         {
-            if (!_active || !Main.Enabled || findObjectsInactive != FindObjectsInactive.Include) return true;
+            if (!_active || !Main.Enabled) return true;
             if (_verifying || type == null || type.Pointer != _fpsType.Pointer || _passThrough) return true;
             try
             {
@@ -71,6 +74,8 @@ namespace FPOptimize
                     }
                     _cached = all[0];
                 }
+                // 表示中のものだけの検索：覚えているプレイヤーが非表示なら、元の検索に任せる（結果が変わりうる）
+                if (findObjectsInactive == FindObjectsInactive.Exclude && !_cached.Cast<Component>().gameObject.activeInHierarchy) return true;
                 _hits++;
                 __result = _cached;
                 if (Main.Verify && (_hits % 20) == 1)
@@ -79,7 +84,7 @@ namespace FPOptimize
                     _verifying = true;
                     try
                     {
-                        var real = Object.FindAnyObjectByType(type, FindObjectsInactive.Include);
+                        var real = Object.FindAnyObjectByType(type, findObjectsInactive);
                         if (real == null || real.Pointer != _cached.Pointer) { _verifyMismatch++; Main.Log("[verify] player cache MISMATCH"); }
                     }
                     finally { _verifying = false; }

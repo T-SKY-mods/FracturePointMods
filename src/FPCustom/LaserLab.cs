@@ -261,13 +261,25 @@ namespace FPCustom
 
         // 先の点（LaserPoint）は場面に 1 つで、どの武器のレーザーも同じものを使う → 手に持っている武器のレーザーの色にする
         static int _dotId = -2, _dotVersion = -1;
-        static float _dotNext;
+        static float _dotNext, _dotWait;
+        static string _dotScene;
+        static readonly List<LaserPoint> _dots = new();
         public static void TickDot(int activeId)
         {
-            if (activeId == _dotId && Store.Version == _dotVersion && Time.unscaledTime < _dotNext) return;
-            _dotId = activeId; _dotVersion = Store.Version; _dotNext = Time.unscaledTime + 1f;   // 場面が替わると点も作り直されるので、ときどき見直す
+            // 全体を探すのは重い（シーンが大きいと 1 回 30ms ほど）。武器・付け替え・シーンが変わったときと、点がまだ見つからないときだけ探す
+            bool same = activeId == _dotId && Store.Version == _dotVersion && _dotScene == Core.Scene;
+            if (same)
+            {
+                if (_dots.Count > 0 && _dots.TrueForAll(d => d != null)) return;
+                if (Time.unscaledTime < _dotNext) return;
+                _dotWait = System.Math.Min(30f, _dotWait * 2f);
+            }
+            else _dotWait = 1f;
+            _dotId = activeId; _dotVersion = Store.Version; _dotScene = Core.Scene; _dotNext = Time.unscaledTime + _dotWait;
             var beam = activeId >= 0 ? Store.Equipped(activeId, Cat.SideRail)?.Beam : null;
-            foreach (var dot in UnityEngine.Object.FindObjectsOfType<LaserPoint>(true))
+            _dots.Clear();
+            foreach (var d in UnityEngine.Object.FindObjectsOfType<LaserPoint>(true)) _dots.Add(d);
+            foreach (var dot in _dots)
             {
                 foreach (var r in dot.GetComponentsInChildren<Renderer>(true)) TintRenderer(r, beam);
                 // ランの中の点は Renderer ではなく赤い Light（壁を照らして点に見える）

@@ -28,7 +28,9 @@ namespace FPOptimize
         // 計測用
         static long _calls, _filtered, _nulls, _destroyed, _noX, _kept, _cacheHits;
         static readonly System.Collections.Generic.Dictionary<IntPtr, bool> _hasX = new();
-        static int _cacheFrame = -1;
+        static int _cacheFrame = -1000;
+        const int CacheFrames = 120;   // コライダーの親子関係は変わらないので、しばらく使い回す
+        static bool[] _keep = new bool[64];
         static double _ms;
 
         public static void Install(HarmonyLib.Harmony _)
@@ -54,9 +56,10 @@ namespace FPOptimize
             try
             {
                 int frame = Time.frameCount;
-                if (frame != _cacheFrame) { _hasX.Clear(); _cacheFrame = frame; }
+                if (frame - _cacheFrame >= CacheFrames || frame < _cacheFrame) { _hasX.Clear(); _cacheFrame = frame; }
                 int n = arr.Length, bad = 0;
-                var keep = new bool[n];
+                if (_keep.Length < n) _keep = new bool[n * 2];
+                var keep = _keep;
                 for (int i = 0; i < n; i++)
                 {
                     keep[i] = Usable(arr, i);
@@ -88,7 +91,7 @@ namespace FPOptimize
             var p = elems[i];
             if (p == IntPtr.Zero) { _nulls++; return false; }
             if (*(IntPtr*)((byte*)p + 2 * IntPtr.Size) == IntPtr.Zero) { _destroyed++; return false; }   // UnityEngine.Object.m_CachedPtr
-            // 同じフレームの中では、どの敵が調べても結果は同じなので使い回す
+            // どの敵が調べても結果は同じなので使い回す
             if (!_hasX.TryGetValue(p, out var has))
             {
                 var go = new Collider(p).gameObject;

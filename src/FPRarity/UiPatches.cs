@@ -98,8 +98,14 @@ namespace FPRarity
 
         // ---------- 拾うときのツールチップ（枠の色とレアリティ名） ----------
 
+        public static long TooltipUiTicks, TooltipUiCalls;   // テスト用の計測
+        public static bool SkipTooltipUi;                     // テスト用
+
         static void UpdateTooltip_Post(UserInteractions __instance, Interactable interactable)
         {
+            if (SkipTooltipUi) return;
+            long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
+            TooltipUiCalls++;
             try
             {
                 var li = interactable?.TryCast<LootableItem>();
@@ -113,6 +119,7 @@ namespace FPRarity
                 Recolor(__instance.tooltipBackground, r.Tier);
             }
             catch (Exception e) { LogOnce("tooltipui", e); }
+            finally { TooltipUiTicks += System.Diagnostics.Stopwatch.GetTimestamp() - t0; }
         }
 
         // ---------- インベントリ画面（武器スロットの枠） ----------

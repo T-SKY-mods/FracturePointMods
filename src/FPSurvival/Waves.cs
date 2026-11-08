@@ -28,6 +28,9 @@ namespace FPSurvival
     public static class Waves
     {
         public const int RewardCapWave = 100;     // 1 体のドルが増えるのは 100 ウェーブまで
+        // ハード：ウェーブの数え方は 1 からのまま、中身はノーマルの 40 ウェーブから。武器箱はレアリティが 5 ウェーブごとに上がり、20 でレジェンダリー確定
+        public const int HardOffset = 39;
+        public const int HardLegendaryWave = 20;
         public const int InitialSpawn = 3;
         public const int MaxAlive = 10;          // 同時に出ている敵の上限
         public const float BossHp = 600f;
@@ -89,12 +92,17 @@ namespace FPSurvival
         //   一番遠いレジェンダリー（ウェーブ 0 で残り 40）でも 0.1% 少しは出る。
         //   確定の手前の数ウェーブで少しずつ上がるので、1 ウェーブでどのレアリティの確率も 20% より大きくは変わらない
         //   例：1 → コモン 96%、5 → コモン 77%、9 → コモン 20%・アンコモン 77%、10 → アンコモン 96.5%（コモンは出ない）
-        public static Tier MinTier(int cleared) => (Tier)Math.Min(4, cleared / 10);
+        public static Tier MinTier(int cleared, bool hard = false) => (Tier)Math.Min(4, cleared / TierStep(hard));
+        static int TierStep(bool hard) => hard ? HardLegendaryWave / 4 : CrateDollarsFrom / 4;
 
         // 武器箱のドル：40 ウェーブ以降（レジェンダリー確定）は、40 で $4,000、そこから 1 ウェーブごとに $4,000 増える
         public const int CrateDollarsFrom = 40;
         public const float CrateDollarsPerWave = 4000f;
-        public static float CrateDollars(int cleared) => cleared < CrateDollarsFrom ? 0f : CrateDollarsPerWave * (cleared - CrateDollarsFrom + 1);
+        public static float CrateDollars(int cleared, bool hard = false)
+        {
+            int from = hard ? HardLegendaryWave : CrateDollarsFrom;
+            return cleared < from ? 0f : CrateDollarsPerWave * (cleared - from + 1);
+        }
         static readonly int[] UpLeft = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 19, 29, 39 };                                       // 確定まで残り何ウェーブか
         static readonly double[] UpProb = { 0.80, 0.62, 0.46, 0.33, 0.23, 0.155, 0.10, 0.065, 0.04, 0.01, 0.004, 0.0015 };  // その時の「そのレアリティ以上」の確率（間は対数で補間）
 
@@ -109,11 +117,11 @@ namespace FPSurvival
         }
 
         // 各レアリティ（コモン〜レジェンダリー）の確率
-        public static float[] CrateOdds(int cleared)
+        public static float[] CrateOdds(int cleared, bool hard = false)
         {
             var atLeast = new double[6];
             atLeast[0] = 1.0;
-            for (int t = 1; t <= 4; t++) atLeast[t] = UpChance(10 * t - cleared);
+            for (int t = 1; t <= 4; t++) atLeast[t] = UpChance(TierStep(hard) * t - cleared);
             var odds = new float[5];
             for (int t = 0; t < 5; t++) odds[t] = (float)(atLeast[t] - atLeast[t + 1]);
             return odds;
@@ -125,23 +133,28 @@ namespace FPSurvival
         //   防具（ヘルメット・ベスト）：なし 5、コモン 4、アンコモン 3、レア 2、エリート 1、レジェンダリー 0
         //   コモンの小型武器だけ（大型武器・防具なし）= 28 ポイント = ウェーブ +20（上限）。全部レジェンダリー = 0 ポイント = ±0
         //   途中でより良い装備に替えたときは、そのときのポイントで（ラン中のいちばん低いポイントを使う）
+        //   ハードはレジェンダリー確定が半分の 20 ウェーブなので、足すウェーブも半分（上限 +10）
         public const int HandicapMaxWaves = 20;
+        public const int HandicapMaxWavesHard = 10;
         public const int HandicapFullPoints = 28;
         public static int WeaponPoints(Tier? tier, bool has) => !has ? 10 : tier == null ? 0 : 2 * (4 - Math.Clamp((int)tier.Value, 0, 4));
         public static int ArmorPoints(int? rarity) => rarity == null ? 5 : 4 - Math.Clamp(rarity.Value, 0, 4);
-        public static int HandicapWaves(int points) =>
-            points <= 0 ? 0 : Math.Min(HandicapMaxWaves, (int)Math.Round(points * (double)HandicapMaxWaves / HandicapFullPoints, MidpointRounding.AwayFromZero));
-
-        public static Tier CrateTier(int cleared, Random rng)
+        public static int HandicapWaves(int points, bool hard = false)
         {
-            var odds = CrateOdds(cleared);
+            int max = hard ? HandicapMaxWavesHard : HandicapMaxWaves;
+            return points <= 0 ? 0 : Math.Min(max, (int)Math.Round(points * (double)max / HandicapFullPoints, MidpointRounding.AwayFromZero));
+        }
+
+        public static Tier CrateTier(int cleared, Random rng, bool hard = false)
+        {
+            var odds = CrateOdds(cleared, hard);
             double r = rng.NextDouble();
             for (int i = 0; i < odds.Length; i++)
             {
                 if (r < odds[i]) return (Tier)i;
                 r -= odds[i];
             }
-            return MinTier(cleared);
+            return MinTier(cleared, hard);
         }
     }
 }

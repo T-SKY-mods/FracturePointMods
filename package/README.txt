@@ -1,4 +1,4 @@
-﻿Fracture Point fan MOD set 1.1.2
+﻿Fracture Point fan MOD set 1.2.0
 =====================================
 
 Game : Steam build 25787540 / Mod loader: MelonLoader 0.7.3
@@ -43,6 +43,8 @@ Japanese: README_JA.txt
       You never lose what you brought in (if you go down, that run's pickups and money are lost)
     - With the rarity mod ON, crate weapons get a rarity based on the wave you reached
     - The lighter your loadout, the better the crate rewards tend to be
+    - Hard mode: pick it on the terminal before you start. Enemies start at wave 40 strength and the crate
+      rewards get better sooner. Hard mode keeps its own best record
 
   [Weapon customization mod] (FPCustom)
     - Add and remove attachments on the "CUSTOMIZE" page of the stash

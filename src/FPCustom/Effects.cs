@@ -134,6 +134,7 @@ namespace FPCustom
         // 手に持っている武器（1 フレームに何度も聞かれるので、フレームごとに覚えておく）
         static int _frame = -1, _activeId = -1;
         static DemoWeapon _active;
+        static IntPtr _activeItem;
         static IntPtr _mobileItem;
         static int _mobileVersion = -1, _mobileFrame = -1000;
         static bool? _mobile;
@@ -143,13 +144,19 @@ namespace FPCustom
             if (_frame != Time.frameCount)
             {
                 _frame = Time.frameCount;
-                _active = null; _activeId = -1;
                 try
                 {
-                    _active = Refs.Fps?.GetActiveItem()?.gameObject?.GetComponent<DemoWeapon>();
-                    _activeId = Weapons.IdOf(_active);
+                    // 持ち替えたときだけ調べ直す（武器の名前から種類を探すので毎フレームは重い）
+                    var item = Refs.Fps?.GetActiveItem();
+                    var ptr = item == null ? IntPtr.Zero : item.Pointer;
+                    if (ptr != _activeItem || _active == null)
+                    {
+                        _activeItem = ptr;
+                        _active = item?.gameObject?.GetComponent<DemoWeapon>();
+                        _activeId = Weapons.IdOf(_active);
+                    }
                 }
-                catch { }
+                catch { _active = null; _activeId = -1; _activeItem = IntPtr.Zero; }
             }
             id = _activeId;
             return _active;
@@ -831,8 +838,10 @@ namespace FPCustom
             catch (Exception e) { Main.Log("[effect] stash mags failed: " + e.Message); }
         }
 
+        public static bool TickOffForTest;   // 測定用
         public static void Tick()
         {
+            if (TickOffForTest) return;
             try { TickVgrip(); } catch (Exception e) { Main.Log("[effect] vertical grip failed: " + e.Message); }
             try { TickKacSway(); } catch (Exception e) { Core.LogOnce("kacsway", "[effect] KAC sway failed: " + e.Message); }
             try { Active(out int aid); LaserLab.TickDot(aid); } catch (Exception e) { Core.LogOnce("laserdot", "[effect] laser dot color failed: " + e.Message); }

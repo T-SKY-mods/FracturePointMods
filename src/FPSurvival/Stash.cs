@@ -44,6 +44,7 @@ namespace FPSurvival
             public float Earned { get; set; }
             public List<int> CrateWeapons { get; set; } = new();     // 武器箱で受け取った武器（拠点でもマガジンを 1 本残す）
             public int PartsFound { get; set; }                       // 脱出したときに持っていた壊れた武器部品（サバイバル中に拾った分）
+            public bool Hard { get; set; }                           // ハードモード
             public int Handicap { get; set; } = -1;                  // 縛りのポイント（ラン中のいちばん低い値。-1 はまだ数えていない）
             public List<PrefE> Prefs { get; set; } = new();          // サバイバル中だけ変えたゲームの設定（元の値）
         }
@@ -71,9 +72,11 @@ namespace FPSurvival
             return n;
         }
         public static BestRecord Best { get; private set; }
+        public static BestRecord BestHard { get; private set; }   // ハードの記録はノーマルと別
 
         static string PendingPath => Path.Combine(Main.Dir, "pending.json");
         static string RecordPath => Path.Combine(Main.Dir, "record.json");
+        static string RecordHardPath => Path.Combine(Main.Dir, "record_hard.json");
         static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
 
         public static bool InRun => Pending != null && Pending.State == "active";
@@ -84,6 +87,8 @@ namespace FPSurvival
             catch (Exception e) { Main.Log("[stash] pending.json unreadable: " + e.Message); BackupBroken(PendingPath); }
             try { if (File.Exists(RecordPath)) Best = JsonSerializer.Deserialize<BestRecord>(File.ReadAllText(RecordPath)); }
             catch (Exception e) { Main.Log("[stash] record.json unreadable: " + e.Message); BackupBroken(RecordPath); }
+            try { if (File.Exists(RecordHardPath)) BestHard = JsonSerializer.Deserialize<BestRecord>(File.ReadAllText(RecordHardPath)); }
+            catch (Exception e) { Main.Log("[stash] record_hard.json unreadable: " + e.Message); BackupBroken(RecordHardPath); }
             Main.Log($"[stash] loaded: pending={Pending?.State ?? "none"} best={Best?.Waves.ToString() ?? "none"}");
         }
 
@@ -109,10 +114,13 @@ namespace FPSurvival
         public static void Offer(int waves, float dollars, string result)
         {
             if (Pending == null) return;
-            if (Best != null && (waves < Best.Waves || (waves == Best.Waves && dollars <= Best.Dollars))) return;
-            Best = new BestRecord { Waves = waves, Main = Pending.Main, Sub = Pending.Sub, Dollars = dollars, Result = result, Date = DateTime.Now.ToString("yyyy-MM-dd") };
-            try { WriteAtomic(RecordPath, JsonSerializer.Serialize(Best, Json)); } catch (Exception e) { Main.Log("[stash] record save failed: " + e.Message); }
-            Main.Log($"[stash] new best: wave {waves} ${dollars:0} ({result})");
+            bool hard = Pending.Hard;
+            var best = hard ? BestHard : Best;
+            if (best != null && (waves < best.Waves || (waves == best.Waves && dollars <= best.Dollars))) return;
+            best = new BestRecord { Waves = waves, Main = Pending.Main, Sub = Pending.Sub, Dollars = dollars, Result = result, Date = DateTime.Now.ToString("yyyy-MM-dd") };
+            if (hard) BestHard = best; else Best = best;
+            try { WriteAtomic(hard ? RecordHardPath : RecordPath, JsonSerializer.Serialize(best, Json)); } catch (Exception e) { Main.Log("[stash] record save failed: " + e.Message); }
+            Main.Log($"[stash] new best{(hard ? " (hard)" : "")}: wave {waves} ${dollars:0} ({result})");
         }
 
         // ---------- 預かる ----------
@@ -218,7 +226,7 @@ namespace FPSurvival
             if (Pending.Handicap >= 0 && p >= Pending.Handicap) return;
             Pending.Handicap = p;
             SavePending();
-            Main.Log($"[stash] handicap {p} points ({detail}) = crate as wave +{Waves.HandicapWaves(p)}");
+            Main.Log($"[stash] handicap {p} points ({detail}) = crate as wave +{Waves.HandicapWaves(p, Pending.Hard)}");
         }
 
         public static PendingRun Begin(Inventory inv, string main, string sub)

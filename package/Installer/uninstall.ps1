@@ -9,7 +9,7 @@
 #  The game's own save is never touched.
 param([string]$GameDir = '', [switch]$RemoveMelon)
 $ErrorActionPreference = 'Stop'
-$Mods   = 'FPModOption', 'FPRarity', 'FPSurvival', 'FPCustom', 'FPOptimize'
+$Mods   = 'FPModOption', 'FPRarity', 'FPSurvival', 'FPCustom', 'FPOptimize', 'FPHitMarker'
 $Models = 'FPRarity', 'FPCustom'
 
 . (Join-Path $PSScriptRoot 'common.ps1')

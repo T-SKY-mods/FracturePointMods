@@ -32,6 +32,9 @@ namespace FPRarity
                 return;
             }
             S["dumpweapons"] = () => WeaponDump.Steps();
+            S["balancedump"] = () => new() { ("dump balance data", WeaponDump.Balance) };
+            S["rangedump"] = () => new() { ("dump stat ranges", WeaponDump.Ranges) };
+            S["dumps"] = () => new() { ("dump balance data", WeaponDump.Balance), ("dump stat ranges", WeaponDump.Ranges) };
             S["safemode"] = () => SafeModeSteps();
             S["stashshot"] = () => StashShot.Steps();
             S["unused"] = () => UnusedDump.Steps();
@@ -59,7 +62,12 @@ namespace FPRarity
             S["lootfloor"] = () =>
             {
                 // 落ちている武器の出方（FPModOption.LootStats）を、エンドレスの階の中で調べる
-                var st = new List<(string, Action)> { ("start endless run", () => Main.FindAll<ButtonStartEndlessMode>().FirstOrDefault()?.StartEndlessRun()) };
+                var st = new List<(string, Action)> { ("start endless run", () =>
+                {
+                    var ff = System.IO.Path.Combine(Main.Dir, "perf_floor.txt");   // 何階として作るか（無ければゲームのまま）
+                    if (System.IO.File.Exists(ff) && int.TryParse(System.IO.File.ReadAllText(ff).Trim(), out var fl)) { EndlessBoss.ForceNormalForTest = true; EndlessBoss.ForceFloorForTest = fl; }
+                    Main.FindAll<ButtonStartEndlessMode>().FirstOrDefault()?.StartEndlessRun();
+                }) };
                 for (int i = 0; i < 12; i++) st.Add(("wait load", () => { }));
                 st.Add(("enter elevator + move", () => EndlessProbe.EnterAndMove()));
                 for (int i = 0; i < 16; i++) st.Add(("wait / pick card", EndlessProbe.PickCard));
@@ -90,6 +98,7 @@ namespace FPRarity
             };
             S["perf"] = () => PerfProbe.Steps(boss: false);
             S["perfboss"] = () => PerfProbe.Steps(boss: true);
+            S["perffight"] = () => PerfProbe.Steps(boss: true, fight: true);
             S["langcheck"] = () => LangCheck.Steps();
             S["stashtip"] = () => LangCheck.StashSteps();
             S["opticscan"] = () => SightLab.OpticScanSteps();
@@ -99,6 +108,8 @@ namespace FPRarity
             S["aimprobe"] = () => AimProbe.Steps();
             S["layerprobe"] = () => AimProbe.LayerSteps();
             S["aimfix"] = () => AimProbe.FixSteps();
+            S["tipperf"] = () => TipPerf.Steps();
+            S["adsprobe"] = () => AdsProbe.Steps();
             S["degraded"] = () => DegradedSteps();
             S["degraded"] = DegradedSteps;
             S["safemode"] = SafeModeSteps;
@@ -279,7 +290,9 @@ namespace FPRarity
                         sw.Stop();
                         double postMs = Patches.TooltipPostTicks * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
                         Main.Log($"[test] 200x GetTooltipText = {sw.Elapsed.TotalMilliseconds:0.0} ms ({sw.Elapsed.TotalMilliseconds / 200:0.000} ms/call), of which mod postfix {postMs:0.0} ms over {Patches.TooltipPostCalls} calls");
-                        // 全体の時間はゲーム本体の GetTooltipText のコスト。Mod の後処理だけを判定する
+                        // 全体の時間はゲーム本体の GetTooltipText のコスト。ゲームは毎回プレイヤーをシーン全体から探す（約 6ms）。
+                        //   FPOptimize の PlayerCache が効いていれば 1 回 0.5ms を大きく下回る（地面の武器を見ている間の FPS 低下の再発防止）
+                        Main.Log($"[test] CHECK pickup tooltip game cost < 0.5ms/call (FPOptimize player cache): {(sw.Elapsed.TotalMilliseconds / 200 < 0.5 ? "PASS" : "FAIL")}");
                         Main.Log($"[test] CHECK mod tooltip cost < 0.1ms/call: {(postMs / 200 < 0.1 ? "PASS" : "FAIL")}");
                         if (upd == null) { Main.Log("[test] CHECK tooltip ui: FAIL (no UserInteractions)"); continue; }
                         upd.Invoke(ui, new object[] { new Interactable(li.Pointer) });
@@ -561,12 +574,12 @@ namespace FPRarity
                                 rpmMin = Math.Min(rpmMin, r.FireRateMult); rpmMax = Math.Max(rpmMax, r.FireRateMult);
                                 double eff = bw.MuzzleDamage * r.DamageMult * RarityTable.EffectiveRpm(dw, dw.fireRate * r.FireRateMult) / 60.0;
                                 int ctl = Math.Max(0, StatScale.OrigControl(wi) + (int)MathF.Round(StatScale.ToOld(r.ControlDelta)));   // 抽選は以前の単位
-                                int ctlForDps = Math.Max(0, ctl - RarityTable.MagControlBonus(wi));   // マガジンの上乗せ分は DPS の計算に含めない
+                                int ctlForDps = RarityTable.DpsControl(wi, (Tier)t);   // 実際の反動で決まるコントロール（中心値）
                                 sum += eff; ctlSum += ctl; dmgSum += bw.MuzzleDamage * r.DamageMult;
                                 maxShot = Math.Max(maxShot, bw.MuzzleDamage * r.DamageMult);
                                 // 1発のダメージの上限に当たった個体は、上限で出せる DPS を目標にする
                                 double cap = RarityTable.MaxShotDamage * RarityTable.EffectiveRpm(dw, dw.fireRate * r.FireRateMult) / 60.0;
-                                ratio += eff / Math.Min(RarityTable.TargetDps(wi, (Tier)t, ctlForDps), cap);
+                                ratio += eff / RarityTable.SpecialDamage(wi.Id, (Tier)t) / Math.Min(RarityTable.TargetDps(wi, (Tier)t, ctlForDps), cap);
                             }
                             var avg = sum / n; ratio /= n;
                             line.Append($" {wi.GetName()}=dmg{dmgSum / n:0}/eff{avg:0}/ctl{ctlSum / n:0}/mag{RarityTable.MagSize(wi)}");
@@ -576,12 +589,38 @@ namespace FPRarity
                         Main.Log(line.ToString());
                     }
                     Main.Log($"[test] CHECK effective DPS matches target (±10%): {(bad == 0 ? "PASS" : $"FAIL ({bad})")}");
-                    Main.Log($"[test] CHECK max damage per shot <= {RarityTable.MaxShotDamage} +12% (max {maxShot:0.0}): {(maxShot <= RarityTable.MaxShotDamage * 1.12f + 1f ? "PASS" : "FAIL")}");
+                    // 古い版の武器の移行：ダメージの中心値の変化だけが入り、個体の他の値は変わらない
+                    foreach (var (id, tier, bal, lo, hi) in new[]
+                    {
+                        (14, Tier.Rare, 11, 1.05f, 1.45f), (14, Tier.Legendary, 12, 0.88f, 0.89f), (14, Tier.Legendary, 13, 0.88f, 0.89f), (5, Tier.Elite, 13, 0.99f, 1.01f), (14, Tier.Legendary, 14, 0.99f, 1.01f), (29, Tier.Rare, 11, 0.8f, 0.95f), (0, Tier.Rare, 12, 0.99f, 1.01f), (18, Tier.Legendary, 12, 1.19f, 1.21f),
+                    })
+                    {
+                        var wi = Tracker.ItemById(id);
+                        var r = new WeaponRoll { Uid = "balcheck", WeaponId = id, Tier = tier, BaseTier = Tier.Common, DamageMult = 2f, FireRateMult = 1.03f, ReloadMult = 1.04f, ControlDelta = 11, ErgoDelta = -7, Bal = bal };
+                        RarityTable.Upgrade(r);
+                        float x = r.DamageMult / 2f;
+                        Main.Log($"[test] CHECK v{bal} migration {wi.GetName()} {tier} dmg x{x:0.00}, rest kept: {(r.Bal == RarityTable.BalanceVersion && x >= lo && x <= hi && r.FireRateMult == 1.03f && r.ReloadMult == 1.04f && r.ControlDelta == 11 && r.ErgoDelta == -7 ? "PASS" : "FAIL")}");
+                    }
+                    // 版 13 の個別調整：古い武器の移行で入り、他の武器には入らない
+                    foreach (var (id, dmg, ctl, erg) in new[] { (5, 1.25f, 14, 0), (6, 1f, 0, 12), (13, 1.3f, 10, 0), (23, 1.1f, 15, 0), (0, 1f, 0, 0) })
+                    {
+                        var wi = Tracker.ItemById(id);
+                        var r = new WeaponRoll { Uid = "balcheck", WeaponId = id, Tier = Tier.Elite, BaseTier = Tier.Common, DamageMult = 2f, FireRateMult = 1.03f, ReloadMult = 1.04f, ControlDelta = 11, ErgoDelta = -7, Bal = 12 };
+                        RarityTable.Upgrade(r);
+                        Main.Log($"[test] CHECK v13 special {wi.GetName()}: dmg x{r.DamageMult / 2f:0.00} ctl {r.ControlDelta - 11:+0;-0;0} erg {r.ErgoDelta + 7:+0;-0;0}: {(r.Bal == RarityTable.BalanceVersion && Math.Abs(r.DamageMult - 2f * dmg) < 0.011f && r.ControlDelta == 11 + ctl && r.ErgoDelta == -7 + erg && r.ReloadMult == 1.04f ? "PASS" : "FAIL")}");
+                    }
+                    // 版 14 の G-18C：コントロールとダメージだけ変わる
+                    {
+                        var r = new WeaponRoll { Uid = "balcheck", WeaponId = 13, Tier = Tier.Elite, BaseTier = Tier.Common, DamageMult = 2f, FireRateMult = 1.03f, ReloadMult = 1.04f, ControlDelta = 40, ErgoDelta = -7, Bal = 14 };
+                        RarityTable.Upgrade(r);
+                        Main.Log($"[test] CHECK v14 G-18C: dmg x{r.DamageMult / 2f:0.00} ctl {r.ControlDelta - 40:+0;-0;0}: {(r.Bal == RarityTable.BalanceVersion && Math.Abs(r.DamageMult - 2.08f) < 0.011f && r.ControlDelta == 25 && r.ErgoDelta == -7 ? "PASS" : "FAIL")}");
+                    }
+                    Main.Log($"[test] CHECK max damage per shot <= 300 +12% (max {maxShot:0.0}): {(maxShot <= 300f * 1.12f + 1f ? "PASS" : "FAIL")}");
                     Main.Log($"[test] CHECK rpm change within ±5% and ±8% roll (x{rpmMin:0.00}~x{rpmMax:0.00}): {(rpmMin >= 0.95f * 0.92f - 0.006f && rpmMax <= 1.05f * 1.08f + 0.006f ? "PASS" : "FAIL")}");
                     // 方針の確認（レア同士）：反動の大きい AKM は扱いやすい R-15 より DPS が高く、コントロールは低いまま
                     //                       セミオートの 1911 は実際の DPS でフルオートの G-18C と同程度（以前は約4割だった）
                     Main.Log($"[test] CHECK low control => higher DPS (AKM {effRare[12]:0}/ctl{ctlRare[12]:0} vs R-15 {effRare[15]:0}/ctl{ctlRare[15]:0}): {(effRare[12] > effRare[15] * 1.05 && ctlRare[12] < ctlRare[15] - 15 ? "PASS" : "FAIL")}");
-                    Main.Log($"[test] CHECK semi-auto not penalized (1911 {effRare[25]:0} vs G-18C {effRare[13]:0}): {(effRare[25] > effRare[13] * 0.85 ? "PASS" : "FAIL")}");
+                    Main.Log($"[test] CHECK semi-auto not penalized (1911 {effRare[25]:0} vs G-18C {effRare[13]:0}): {(effRare[25] > effRare[13] / RarityTable.SpecialDamage(13, Tier.Rare) * 0.85 ? "PASS" : "FAIL")}");
                 }),
                 ("game save -> mod commit", () =>
                 {

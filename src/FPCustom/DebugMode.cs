@@ -12,7 +12,22 @@ namespace FPCustom
     // 終わったらセーブ（とレジストリ）をデバッグ前の控えに戻し、Mod と UserData/FPCustom を外す（tools/debug_mode.ps1）
     public static class DebugMode
     {
-        public static bool On => Main.Dir != null && File.Exists(Path.Combine(Main.Dir, "debug"));
+        // ファイルの確認は毎フレームやると重いので、数秒に 1 回だけ（部屋に入った直後は確認し直す）
+        public static bool On
+        {
+            get
+            {
+                if (Time.unscaledTime >= _onNext || _onScene != Core.Scene)
+                {
+                    _on = Main.Dir != null && File.Exists(Path.Combine(Main.Dir, "debug"));
+                    _onNext = Time.unscaledTime + 5f; _onScene = Core.Scene;
+                }
+                return _on;
+            }
+        }
+        static bool _on;
+        static float _onNext;
+        static string _onScene;
 
         static bool _done;
         static float _next;
@@ -20,7 +35,7 @@ namespace FPCustom
 
         public static void Tick()
         {
-            if (_done || !On || Core.Scene != Core.HubScene || Refs.Bag == null || Tracker.Inv == null) return;
+            if (_done || Core.Scene != Core.HubScene || !On || Refs.Bag == null || Tracker.Inv == null) return;
             if (_next == 0f) { _next = Time.unscaledTime + 3f; return; }   // 部屋に入ってから少し待つ
             if (Time.unscaledTime < _next) return;
             _next = Time.unscaledTime + 1.0f;

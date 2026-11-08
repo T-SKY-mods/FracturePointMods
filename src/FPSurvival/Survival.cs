@@ -96,7 +96,7 @@ namespace FPSurvival
             return 0f;
         }
 
-        public static void Start(ButtonStartEndlessMode button)
+        public static void Start(ButtonStartEndlessMode button, bool hard)
         {
             var inv = Refs.Inv;
             if (inv == null) return;
@@ -108,11 +108,13 @@ namespace FPSurvival
             var sub = held.FirstOrDefault(w => w.Item.Type == WeaponItem.SlotType.Small);
 
             Stash.Begin(inv, RecordKey(main), RecordKey(sub));
+            Stash.Pending.Hard = hard;
+            Stash.SavePending();
             GiveLoadout(inv, held);
             Stash.UpdateHandicap(inv);
             // ゲームのエンドレス開始は $500 を引く。サバイバルは無料なので、引かれる分だけ置いておく
             inv.DollarsCount = 500f;
-            Main.Log($"[start] survival: main={Label(main)} sub={Label(sub)}");
+            Main.Log($"[start] survival{(hard ? " hard" : "")}: main={Label(main)} sub={Label(sub)}");
             Bypass = true;
             Arena.StopLuckyCat();
             try { button.StartEndlessRun(); }

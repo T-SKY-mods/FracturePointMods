@@ -6,6 +6,7 @@ src\FPRarity\      rarity mod (weapon rarity, mastery, sights, endless boss room
 src\FPSurvival\    survival mode mod
 src\FPCustom\      weapon customization mod (attachments)
 src\FPOptimize\    optimization mod
+src\FPHitMarker\   hit marker mod (off until turned on in the MOD tab)
 
 Build: dotnet build -c Release in each folder (FPModOption first). The csproj files reference the game's
 MelonLoader\Il2CppAssemblies (set <GameDir> at the top of each csproj) and the built FPModOption.dll

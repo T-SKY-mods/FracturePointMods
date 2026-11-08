@@ -87,7 +87,7 @@ namespace FPSurvival
         static bool StartRun_Pre(ButtonStartEndlessMode __instance)
         {
             if (Survival.Bypass || Tablet.Page != 1 || Main.Scene != Core.HubScene) return true;
-            try { Survival.Start(__instance); }
+            try { Survival.Start(__instance, Tablet.HardPicked); }
             catch (Exception e) { Main.Log("[start] failed: " + e); Main.Notify(Main.T("サバイバルを開始できませんでした", "Could not start survival"), true); }
             return false;
         }

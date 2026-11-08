@@ -66,7 +66,7 @@ namespace FPRarity
         static readonly System.Collections.Generic.HashSet<int> _loggedTooltips = new();
         static readonly System.Collections.Generic.Dictionary<IntPtr, (string raw, IntPtr active, string result)> _tipCache = new();
 
-        public static long TooltipPostTicks, TooltipPostCalls;
+        public static long TooltipPostTicks, TooltipPostCalls, TooltipMisses;
 
         // true の間は書き換えずにゲームの文章のまま返す（保管庫のツールチップが、地面の武器と同じ文章を作るときに使う）
         public static bool RawTooltip;
@@ -90,6 +90,7 @@ namespace FPRarity
                     __result = cached.result;
                     return;
                 }
+                TooltipMisses++;
                 __result = TooltipRewriter.Rewrite(__result, __instance, r);
                 _tipCache[__instance.Pointer] = (raw, activePtr, __result);
                 if (_tipCache.Count > 256) _tipCache.Clear();

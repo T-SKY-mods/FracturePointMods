@@ -31,6 +31,8 @@ namespace FPSurvival
             TestMode.ExternalScenarios["survdeath"] = () => Steps(Ending.Death);
             TestMode.ExternalScenarios["survquit"] = () => Steps(Ending.Quit);
             TestMode.ExternalScenarios["survresume"] = ResumeSteps;
+            TestMode.ExternalScenarios["survhard"] = HardSteps;
+            TestMode.ExternalScenarios["bossprobe"] = BossProbe.Steps;
         }
 
         enum Ending { Escape, Death, Quit }
@@ -122,6 +124,7 @@ namespace FPSurvival
                 int now = Survival.HandicapPoints(Refs.Inv, out var detail);
                 Check($"handicap of the current loadout: {now}pt ({detail})", now >= 0 && now <= 30);
             }));
+            s.Add(("normal is picked", () => Check("normal is picked at first", !Tablet.HardPicked)));
             s.Add(("start (SPACE)", () => Object.FindObjectOfType<ButtonStartEndlessMode>()?.StartEndlessRun()));
             Wait(s, 12, "wait load");
             s.Add(("run start: stripped + loadout", () =>
@@ -654,6 +657,79 @@ namespace FPSurvival
                 Check("items and $ equal to before the run", now == expect);
             }),
         };
+
+        // ハード：開始ボタン → ハードを選ぶ → 表示はウェーブ 1、中身はウェーブ 40 → 20 ウェーブ扱いで脱出して武器箱を見る
+        static List<(string, Action)> HardSteps()
+        {
+            Arena.PrepSeconds = 600f; Arena.BreakSeconds = 120f; Arena.SpawnInterval = 1f; Arena.BossInterval = 1f;
+            static void Safe() { var phm = Object.FindObjectOfType<PlayerHealthManager>(); if (phm != null) { phm.invincible = true; phm.Health = phm.MaxHealth; } }   // 40 ウェーブの敵に倒されないように
+            var s = new List<(string, Action)>
+            {
+                ("rules", () =>
+                {
+                    bool Near(float a, float b) => Math.Abs(a - b) < 1e-3f;
+                    string Odds(int c) => string.Join("/", Waves.CrateOdds(c, true).Select(o => (o * 100f).ToString("0.#")));
+                    bool sums = Enumerable.Range(0, 40).All(c => Near(Waves.CrateOdds(c, true).Sum(), 1f));
+                    bool noFlip = Enumerable.Range(0, 39).All(c => Enumerable.Range(0, 5).All(t => t <= (int)Waves.MinTier(c + 1, true) || Waves.CrateOdds(c + 1, true)[t] >= Waves.CrateOdds(c, true)[t] - 1e-6f));
+                    float jump = Enumerable.Range(0, 39).Max(c => Enumerable.Range(0, 5).Max(t => Math.Abs(Waves.CrateOdds(c + 1, true)[t] - Waves.CrateOdds(c, true)[t])));
+                    Check($"hard crate odds (C/U/R/E/L %, max jump {jump * 100f:0.#}): 1 {Odds(1)}, 5 {Odds(5)}, 10 {Odds(10)}, 15 {Odds(15)}, 19 {Odds(19)}, 20 {Odds(20)}",
+                          sums && noFlip && jump <= 0.2001f && Waves.CrateOdds(19, true)[4] < 0.81f && Waves.CrateOdds(20, true)[4] == 1f && Waves.CrateOdds(19)[4] < 0.01f && Waves.MinTier(20, true) == Tier.Legendary);
+                    Check($"hard crate dollars and handicap (20 ${Waves.CrateDollars(20, true):0}, 21 ${Waves.CrateDollars(21, true):0}, 28pt +{Waves.HandicapWaves(28, true)}, 15pt +{Waves.HandicapWaves(15, true)})",
+                          Waves.CrateDollars(19, true) == 0f && Waves.CrateDollars(20, true) == Waves.CrateDollars(40) && Waves.CrateDollars(21, true) == Waves.CrateDollars(41)
+                          && Waves.HandicapWaves(28, true) == 10 && Waves.HandicapWaves(15, true) == 5 && Waves.HandicapWaves(28) == 20);
+                }),
+                ("make the loadout 1 primary + 1 secondary", () =>
+                {
+                    var held = Survival.Held(Refs.Inv);
+                    foreach (var type in new[] { WeaponItem.SlotType.Big, WeaponItem.SlotType.Small })
+                        foreach (var w in held.Where(h => h.Item.Type == type).Skip(1)) Refs.Bag.MoveWeaponToStash(w.Item);
+                }),
+                ("focus tablet", () => { try { Tablet.TabletForTest?.Interact(); } catch (Exception e) { Core.Log("[survtest] focus failed " + e.Message); } }),
+                ("page 2", () => Tablet.SetPage(1)),
+            };
+            Wait(s, 2);
+            s.Add(("shot normal", () => Shot("mode_normal")));
+            s.Add(("pick hard", () => Tablet.ChooseForTest(true)));
+            Wait(s, 2);
+            s.Add(("shot hard", () => Shot("mode_hard")));
+            s.Add(("start hard", () => Object.FindObjectOfType<ButtonStartEndlessMode>()?.StartEndlessRun()));
+            Wait(s, 16, "wait load");
+            s.Add(("run is hard", () => Check($"pending run is hard ({Stash.Pending?.Hard}, phase {Arena.Now})", Arena.Hard)));
+            for (int i = 0; i < 20; i++) s.Add(("wait arena", () => { Safe(); if (Arena.Now == Arena.Phase.Prep) Arena.SkipTimerForTest(); }));
+            s.Add(("wave 1", () =>
+            {
+                Check($"hard wave 1 shows as wave {Arena.Wave}, content of wave 40: {Arena.SpecNowForTest}", Arena.Wave == 1 && Arena.SpecNowForTest.ToString() == Waves.For(40).ToString());
+                Shot("hard_wave1");
+            }));
+            for (int i = 0; i < 12; i++) s.Add(("clear wave 1", () => { Safe(); Play(1); }));
+            s.Add(("as if 20 waves were cleared", () =>
+            {
+                Arena.SetNextWaveForTest(21);
+                Check($"in break (phase {Arena.Now}, cleared {Arena.Cleared})", Arena.Now == Arena.Phase.Break && Arena.Cleared == 20);
+                Arena.OnExit();
+            }));
+            Wait(s, 2);
+            s.Add(("walk in", () => Arena.Teleport(Arena.LobbyForTest, -Arena.InwardForTest)));
+            Wait(s, 2);
+            s.Add(("search crate", () =>
+            {
+                _crateDollarsBefore = Refs.Inv.DollarsCount;
+                Arena.CrateForTest?.GetComponentInChildren<LootableChanceItems>(true)?.Interact();
+            }));
+            Wait(s, 2);
+            s.Add(("crate", () =>
+            {
+                int hp = Math.Max(0, Stash.Pending?.Handicap ?? 0);
+                int want = 20 + Waves.HandicapWaves(hp, true);
+                float got = Refs.Inv.DollarsCount - _crateDollarsBefore;
+                Check($"hard crate: 20 + handicap {hp}pt = {Arena.CrateWavesForTest}, legendary ({string.Join(" / ", Arena.CrateTiers)}), ${got:0}",
+                      Arena.CrateWavesForTest == want && (!Link.RarityActive || Arena.CrateTiers.Count == 2 && Arena.CrateTiers.All(t => t == Tier.Legendary)) && Math.Abs(got - Waves.CrateDollars(want, true)) < 1f);
+                var normal = Stash.Best;
+                Stash.Offer(3, 100f, "died");
+                Check($"hard record is separate from normal (hard wave {Stash.BestHard?.Waves})", Stash.BestHard != null && ReferenceEquals(normal, Stash.Best));
+            }));
+            return s;
+        }
 
         // ウェーブを進める：出ている敵を倒し、until まで休憩は飛ばす
         static void Play(int until)

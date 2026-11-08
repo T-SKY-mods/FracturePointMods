@@ -14,12 +14,12 @@ $MlUrl     = 'https://github.com/LavaGang/MelonLoader/releases/download/v0.7.3/M
 $MlSha256  = '5B2B2F3D1CD42B59EC886C5BDC2663EDAE87A0097A4F4A8F58C0965A99DDA416'
 $SaveDir   = Join-Path $env:USERPROFILE 'AppData\LocalLow\Kyrylo Burlaka\Fracture Point Release'
 $RegKey    = 'HKCU\Software\Kyrylo Burlaka\Fracture Point Release'
-$Mods      = 'FPModOption', 'FPRarity', 'FPSurvival', 'FPCustom', 'FPOptimize'
+$Mods      = 'FPModOption', 'FPRarity', 'FPSurvival', 'FPCustom', 'FPOptimize', 'FPHitMarker'
 $Models    = 'FPRarity', 'FPCustom'
 
 . (Join-Path $PSScriptRoot 'common.ps1')
 
-Write-Host 'Fracture Point MODs 1.1.2 installer' -ForegroundColor White
+Write-Host 'Fracture Point MODs 1.2.0 installer' -ForegroundColor White
 
 # --- 1. game folder ---
 $GameDir = Resolve-GameDir $GameDir

@@ -16,14 +16,16 @@ namespace FPSurvival
         public static int Page { get; private set; }
         static EndlessModeTablet _tablet;
         static Transform _canvas;
-        static TMP_Text _tab, _title, _body;
+        static TMP_Text _tab, _title, _body, _modeNormal, _modeHard;
+        public static bool HardPicked { get; private set; }   // 2 ページ目で選んでいる難易度
         static readonly List<GameObject> _endlessOnly = new();
         static readonly List<(TMP_Text text, string orig)> _buttonTexts = new();
         static float _nextFind;
 
         public static void OnSceneLoaded()
         {
-            Page = 0; _tablet = null; _canvas = null; _tab = null; _title = null; _body = null;
+            Page = 0; _tablet = null; _canvas = null; _tab = null; _title = null; _body = null; _modeNormal = null; _modeHard = null;
+            HardPicked = false;
             _endlessOnly.Clear(); _buttonTexts.Clear(); _nextFind = 0f;
         }
 
@@ -41,6 +43,8 @@ namespace FPSurvival
             if (kb == null || _tablet == null || !_tablet.focused) return;
             if (kb.rightArrowKey.wasPressedThisFrame && Page == 0) SetPage(1);
             else if (kb.leftArrowKey.wasPressedThisFrame && Page == 1) SetPage(0);
+            else if (Page == 1 && kb.upArrowKey.wasPressedThisFrame) Pick(false);
+            else if (Page == 1 && kb.downArrowKey.wasPressedThisFrame) Pick(true);
             var mouse = UnityEngine.InputSystem.Mouse.current;
             if (mouse != null && mouse.leftButton.wasPressedThisFrame) Click(mouse.position.ReadValue());
         }
@@ -48,17 +52,28 @@ namespace FPSurvival
         // 右上の案内（「サバイバル ▶」/「◀ エンドレス」）をクリックするとページを切り替える
         public static bool Click(Vector2 screen)
         {
-            if (_tab == null || !HitsTab(screen)) return false;
+            if (_tab == null) return false;
+            if (Page == 1 && Hits(_modeNormal, screen)) { Pick(false); return true; }
+            if (Page == 1 && Hits(_modeHard, screen)) { Pick(true); return true; }
+            if (!Hits(_tab, screen)) return false;
             SetPage(Page == 0 ? 1 : 0);
             return true;
         }
 
-        static bool HitsTab(Vector2 screen)
+        static void Pick(bool hard)
+        {
+            HardPicked = hard;
+            SetPage(Page);
+        }
+
+        public static void ChooseForTest(bool hard) { HardPicked = hard; SetPage(1); }
+
+        static bool Hits(TMP_Text text, Vector2 screen)
         {
             var cam = Camera.main;
             if (cam == null) return false;
             // 文字の周りを少し広めに当たりにする
-            var corners = Corners();
+            var corners = Corners(text);
             var min = new Vector2(float.MaxValue, float.MaxValue); var max = new Vector2(float.MinValue, float.MinValue);
             foreach (var c in corners)
             {
@@ -71,10 +86,10 @@ namespace FPSurvival
         }
 
         // 案内の四隅（ワールド座標）。ゲーム側の配列で受け取る（C# の配列を渡すと写しに書かれて値が戻らない）
-        static Vector3[] Corners()
+        static Vector3[] Corners(TMP_Text text)
         {
             var arr = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<Vector3>(4);
-            _tab.rectTransform.GetWorldCorners(arr);
+            text.rectTransform.GetWorldCorners(arr);
             return new[] { arr[0], arr[1], arr[2], arr[3] };
         }
 
@@ -82,7 +97,7 @@ namespace FPSurvival
         {
             var cam = Camera.main;
             if (_tab == null || cam == null) return null;
-            var corners = Corners();
+            var corners = Corners(_tab);
             var mid = (corners[0] + corners[2]) / 2f;
             var p = cam.WorldToScreenPoint(mid);
             return new Vector2(p.x, p.y);
@@ -140,8 +155,25 @@ namespace FPSurvival
             _body.enableWordWrapping = true;
             _title.gameObject.SetActive(false);
             _body.gameObject.SetActive(false);
+            // 見出しの横に難易度（↑↓ かクリックで選ぶ）
+            _modeNormal = ModeText(title, "FPSurvival normal", canvasRt, 0f);
+            _modeHard = ModeText(title, "FPSurvival hard", canvasRt, 0.2f);
             SetPage(0);
             Main.Log($"[tablet] page 2 ready (body area {area}, button texts {_buttonTexts.Count})");
+        }
+
+        static TMP_Text ModeText(TMP_Text title, string name, RectTransform canvasRt, float x)
+        {
+            var t = Clone(title, name);
+            var rt = t.rectTransform;
+            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.sizeDelta = new Vector2(canvasRt.rect.width * 0.18f, canvasRt.rect.height * 0.1f) / Math.Max(0.01f, title.rectTransform.localScale.x);   // 見出しは拡大して置かれている
+            rt.anchoredPosition = new Vector2(canvasRt.rect.width * x, canvasRt.rect.height * 0.4f);
+            t.fontSize = title.fontSize * 0.5f;
+            t.enableAutoSizing = false;
+            t.alignment = TextAlignmentOptions.Left;
+            t.gameObject.SetActive(false);
+            return t;
         }
 
         static TMP_Text Clone(TMP_Text src, string name)
@@ -163,7 +195,9 @@ namespace FPSurvival
             _body.gameObject.SetActive(surv);
             _tab.text = surv ? Main.T("◀ エンドレス", "◀ ENDLESS") : Main.T("サバイバル ▶", "SURVIVAL ▶");
             foreach (var (t, orig) in _buttonTexts)
-                if (t != null) t.text = surv ? Main.T("無料 - サバイバル開始 - SPACE", "FREE - start survival - PRESS SPACE") : orig;
+                if (t != null) t.text = !surv ? orig : HardPicked ? Main.T("無料 - ハードで開始 - SPACE", "FREE - start HARD - PRESS SPACE") : Main.T("無料 - ノーマルで開始 - SPACE", "FREE - start NORMAL - PRESS SPACE");
+            ShowMode(_modeNormal, surv, !HardPicked, Main.T("ノーマル", "NORMAL"));
+            ShowMode(_modeHard, surv, HardPicked, Main.T("ハード", "HARD"));
             if (surv)
             {
                 _title.text = Main.T("• サバイバルモード", "• SURVIVAL MODE");   // 言語を切り替えたときのため
@@ -173,9 +207,18 @@ namespace FPSurvival
             Main.Log($"[tablet] page {page}");
         }
 
-        static string BodyText()
+        static void ShowMode(TMP_Text t, bool show, bool picked, string name)
         {
-            var b = Stash.Best;
+            if (t == null) return;
+            t.gameObject.SetActive(show);
+            if (!show) return;
+            t.text = (picked ? "▶ " : "   ") + name;
+            t.color = picked ? Color.white : new Color(0.5f, 0.5f, 0.5f);
+            t.ForceMeshUpdate(true, true);
+        }
+
+        static List<string> BestLines(Stash.BestRecord b)
+        {
             var lines = new List<string>();
             if (b == null) lines.Add(Main.T("ベスト記録：まだありません", "Best: none yet"));
             else
@@ -185,6 +228,12 @@ namespace FPSurvival
                 lines.Add(Main.T($"  大型武器：{Survival.Show(b.Main)}　小型武器：{Survival.Show(b.Sub)}", $"  Big weapon: {Survival.Show(b.Main)}   Small weapon: {Survival.Show(b.Sub)}"));
                 lines.Add(Main.T($"  脱出時のドル：${b.Dollars:N0}", $"  Dollars at escape: ${b.Dollars:N0}"));
             }
+            return lines;
+        }
+
+        static string BodyText()
+        {
+            var lines = BestLines(HardPicked ? Stash.BestHard : Stash.Best);
             var err = Survival.CheckLoadout(Survival.Held(Refs.Inv));
             if (err != null) lines.Add("<color=#FF6060>" + err + "</color>");
             lines.Add("");
@@ -200,6 +249,7 @@ namespace FPSurvival
                     "・剛熊の像・時の像・戦士の花瓶・招き猫の像の効果と、難易度の設定はサバイバルでは働きません",
                     "・ウェーブの合間にエレベーター前の扉を調べると終了。武器箱で大型・小型武器を 1 つずつ受け取り、エレベーターで拠点へ戻ります",
                     "・持ち込む装備を絞るほど、武器箱から良い報酬が出やすくなります",
+                    "・ハードはウェーブ 40 の敵から始まり、武器箱の報酬も早く良くなります",
                     "・ダウンしても持ち込んだ物は失いませんが、稼いだドルは持ち帰れません",
                     "・持ち込まなかったドル・ルーブル・弾薬・回復アイテム・戦利品は預かり、拠点に戻ると返却します",
                 }
@@ -213,6 +263,7 @@ namespace FPSurvival
                     "- The Mighty Bear Statue, Statue of Time, The Warrior's Vase, Lucky Cat Statue and the difficulty setting have no effect in survival",
                     "- Between waves, use the door to the elevator room to end the run. Take one big and one small weapon from the Weapon Crate, then return to the hub by elevator",
                     "- The lighter your loadout, the better the Weapon Crate rewards tend to be",
+                    "- Hard starts with the enemies of wave 40, and Weapon Crate rewards improve sooner",
                     "- If you go down, you keep what you brought, but the dollars you earned are lost",
                     "- The dollars, roubles, ammo, health items and loot you did not bring are kept safe and returned at the hub",
                 });

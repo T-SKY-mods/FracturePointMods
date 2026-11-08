@@ -55,11 +55,19 @@ namespace FPCustom
 
         public static bool Unlocked(int id, Att a) => a != null && (DebugMode.On || Catalog.IsFactory(a, id) || (Get(id, false)?.Unlocked.Contains(a.Id) ?? false));
 
+        // 毎フレーム何度も聞かれるので、付け外しのたびに作り直す覚えから答える
+        static readonly Dictionary<(int, Cat), Att> _equipped = new();
+        static int _equippedVersion = -1;
+
         public static Att Equipped(int id, Cat cat)
         {
+            if (_equippedVersion != Version) { _equipped.Clear(); _equippedVersion = Version; }
+            if (_equipped.TryGetValue((id, cat), out var known)) return known;
             var e = Get(id, false);
-            if (e != null && e.Equipped.TryGetValue(cat.ToString(), out var v)) return string.IsNullOrEmpty(v) ? null : Catalog.Get(v);
-            return Catalog.For(id, cat).FirstOrDefault(a => Catalog.IsFactory(a, id));   // 最初から付いている部品
+            Att att;
+            if (e != null && e.Equipped.TryGetValue(cat.ToString(), out var v)) att = string.IsNullOrEmpty(v) ? null : Catalog.Get(v);
+            else att = Catalog.For(id, cat).FirstOrDefault(a => Catalog.IsFactory(a, id));   // 最初から付いている部品
+            return _equipped[(id, cat)] = att;
         }
 
         public static int UnlockedCount(int id) => Catalog.CatsFor(id).Sum(c => Catalog.For(id, c).Count(a => Unlocked(id, a)));

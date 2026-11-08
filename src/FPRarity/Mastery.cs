@@ -92,8 +92,14 @@ namespace FPRarity
         static WeaponRoll Up(WeaponRoll r) { if (!Features.Rarity) return Features.View(r); RarityTable.Upgrade(r); return r; }   // 古いバランスの武器は今の計算に置き換えてから使う
         public static float DamageMult(WeaponRoll r) => r == null ? 1f : Up(r).DamageMult * (1f + DamagePerPoint * PointsIn(r.WeaponId, Stat.Damage));
         public static float FireRateMult(WeaponRoll r) => r == null ? 1f : IsHandgun(r.WeaponId) ? Up(r).FireRateMult : Up(r).FireRateMult * (1f + FireRatePerPoint * PointsIn(r.WeaponId, Stat.FireRate));
-        // リロードの速さ（ハンドガンだけ。ロールの補正 × 熟練度）
-        public static float ReloadMult(WeaponRoll r) => r == null || !IsHandgun(r.WeaponId) ? 1f : Up(r).ReloadMult * (1f + ReloadPerPoint * PointsIn(r.WeaponId, Stat.FireRate));
+        // リロードの速さ（ロールの補正と熟練度はハンドガンだけ。個別調整はメイン武器にも効く）
+        public static float ReloadMult(WeaponRoll r)
+        {
+            if (r == null) return 1f;
+            var u = Up(r);
+            float bonus = u.Legacy ? 1f : RarityTable.ReloadBonus(r.WeaponId, u.Tier);
+            return IsHandgun(r.WeaponId) ? bonus * u.ReloadMult * (1f + ReloadPerPoint * PointsIn(r.WeaponId, Stat.FireRate)) : bonus;
+        }
         public static bool IsHandgun(int weaponId) => RarityTable.IsHandgun(Tracker.ItemById(weaponId));
         // 反動の計算用（小数のまま）と、表示用（整数に丸める）
         public static float ControlDeltaF(WeaponRoll r) => r == null ? 0f : Up(r).ControlDelta + ControlPerPoint * PointsIn(r.WeaponId, Stat.Control);

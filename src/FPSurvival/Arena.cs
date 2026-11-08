@@ -22,6 +22,9 @@ namespace FPSurvival
         public static Phase Now { get; private set; }
         public static int Wave { get; private set; }
         public static int Cleared { get; private set; }
+        public static bool Hard => Stash.Pending?.Hard == true;
+        // 敵の中身を決めるウェーブ（ハードは表示のウェーブ 1 がノーマルの 40）
+        static int ContentWave(int wave) => Hard ? wave + Waves.HardOffset : wave;
 
         public const int MapFloor = 12;            // 通常ランの最終ボスの屋上（SetupNormalFloor の番号）
         const string MapRoom = "boss 10(Clone)";
@@ -48,6 +51,7 @@ namespace FPSurvival
             public bool PoseChecked;
             public bool Searched;
             public float Closest = float.MaxValue, ProgressAt = -1f, LastHp;   // 残り少ないときの見張り
+            public Il2CppEnemyAI.StateController Ai;   // ボスの巡回で使う
         }
 
         static readonly System.Random Rng = new();
@@ -129,6 +133,7 @@ namespace FPSurvival
                 if ((Now == Phase.Wave || Now == Phase.Prep || Now == Phase.Break) && PlayerInRoom()) PutOnRoof(false);
                 if (Now == Phase.Ending) TickEnding();
                 if (Now == Phase.Wave) CheckStragglers(now);
+                if (Now == Phase.Wave && now >= _nextBossWalk) { _nextBossWalk = now + 3f; BossWalk(); }
             }
             if (now >= _nextWaypoint) { _nextWaypoint = now + 2f; MoveWaypoints(); }
             switch (Now)
@@ -643,7 +648,7 @@ namespace FPSurvival
             SetExit(false);
             if (PlayerInRoom()) PutOnRoof(true);
             Wave = n;
-            _spec = SpecForTest ?? Waves.For(n);
+            _spec = SpecForTest ?? Waves.For(ContentWave(n));
             _queue = Waves.Queue(_spec, Rng);
             Now = Phase.Wave;
             Main.Log($"[arena] wave {n}: {_spec}");
@@ -698,7 +703,7 @@ namespace FPSurvival
             if (root == null) return false;
             var eh = root.GetComponentInChildren<EnemyHealth>(true);
             if (eh == null) { Main.Log($"[arena] spawned {root.name} has no health"); Object.Destroy(root); return false; }
-            if (k == Kind.Boss) { BossHealth(eh); Link.HideBossBars?.Invoke(); }
+            if (k == Kind.Boss) { BossHealth(eh); Link.HideBossBars?.Invoke(); _nextBossWalk = Time.realtimeSinceStartup + 0.5f; }
             _enemies.Add(new Tracked { Health = eh, Root = root, Kind = k, Search = root.GetComponentInChildren<LootableChanceItems>(true) });
             _recentSpawns.Add(pos); if (_recentSpawns.Count > 4) _recentSpawns.RemoveAt(0);
             Main.Log($"[arena] + {k} '{root.name}' hp={eh.health:0} at {pos} (player {Vector3.Distance(pos, fps.transform.position):0}m)");
@@ -788,6 +793,28 @@ namespace FPSurvival
                 float a = (float)(Rng.NextDouble() * Math.PI * 2), r = 3f + (float)Rng.NextDouble() * 6f;
                 var p = fps.transform.position + new Vector3(MathF.Cos(a) * r, 0f, MathF.Sin(a) * r);
                 go.transform.position = OnNav(p, 3f) ?? fps.transform.position;
+            }
+        }
+
+        // ---------- ボスの巡回 ----------
+        //   ボスは元の部屋の巡回先を持ったまま出てくるので、離れたまま端を回り続けてプレイヤーを見つけない。
+        //   雑魚と同じプレイヤーのまわりの巡回先へ歩かせる。プレイヤーを見つけた後はゲームの AI に任せる
+        static float _nextBossWalk;
+
+        static void BossWalk()
+        {
+            foreach (var e in _enemies)
+            {
+                if (e.Dead || e.Kind != Kind.Boss || e.Root == null) continue;
+                try
+                {
+                    e.Ai ??= e.Root.GetComponentInChildren<Il2CppEnemyAI.StateController>(true);
+                    var c = e.Ai; var n = c?.nav;
+                    if (n == null || !n.enabled || !n.isOnNavMesh || c.targetInSight || c.currentState?.name != "PatrolState") continue;
+                    if (c.patrolWayPoints == null || c.patrolWayPoints.Pointer != _wpList.Pointer) { c.patrolWayPoints = _wpList; c.waypointIndex = 0; }
+                    n.SetDestination(_wpList[Rng.Next(_wpList.Count)].position);
+                }
+                catch (Exception ex) { Main.Log("[arena] boss walk: " + ex.Message); }
             }
         }
 
@@ -947,7 +974,7 @@ namespace FPSurvival
         static void OnKilled(Tracked e)
         {
             var inv = Refs.Inv;
-            int reward = Waves.Reward(e.Kind, Wave);
+            int reward = Waves.Reward(e.Kind, ContentWave(Wave));
             // ゲームの AddDollars は「〇ドルをインベントリに追加」を出すので、通知なしで足す
             try { if (inv != null) inv.DollarsCount = inv.DollarsCount + reward; } catch (Exception ex) { Main.Log("[arena] add dollars failed: " + ex.Message); }
             Main.Log($"[arena] killed {e.Kind} +${reward} total=${inv?.DollarsCount:0}");
@@ -1122,11 +1149,12 @@ namespace FPSurvival
             var got = new List<string>();
             // 縛りのポイントの分だけ先のウェーブの報酬にする（表示はしない）
             Stash.UpdateHandicap(inv);
-            int bonus = Waves.HandicapWaves(Math.Max(0, Stash.Pending?.Handicap ?? 0));
+            bool hard = Hard;
+            int bonus = Waves.HandicapWaves(Math.Max(0, Stash.Pending?.Handicap ?? 0), hard);
             int waves = Cleared + bonus;
             CrateWavesForTest = waves;
             // レアリティは 1 回だけ抽選して、大型・小型の 2 本とも同じにする
-            var tier = Waves.CrateTier(waves, Rng);
+            var tier = Waves.CrateTier(waves, Rng, hard);
             CrateTiers.Clear();
             foreach (var slot in new[] { WeaponItem.SlotType.Big, WeaponItem.SlotType.Small })
             {
@@ -1139,7 +1167,7 @@ namespace FPSurvival
                 try { added = inv.AddWeapon(wi); } catch (Exception e) { Main.Log("[arena] AddWeapon failed: " + e.Message); }
                 int mags = 0;
                 foreach (var m in inv.MagStored) if (m != null && m.WeaponName == wi.GetName()) mags++;
-                Main.Log($"[arena] crate: {slot} {wi.GetName()} {tier} (min {Waves.MinTier(waves)}, waves {Cleared} +{bonus}) added={added} mags={mags}");
+                Main.Log($"[arena] crate: {slot} {wi.GetName()} {tier} (min {Waves.MinTier(waves, hard)}, waves {Cleared} +{bonus}{(hard ? ", hard" : "")}) added={added} mags={mags}");
                 if (!added) continue;
                 got.Add(wi.GetName());
                 if (rolled) CrateTiers.Add(tier);
@@ -1147,7 +1175,7 @@ namespace FPSurvival
             }
             if (got.Count == 0) return;
             // 40 ウェーブ以降はドルも入っている。脱出時に稼いだお金として持ち帰る。AddDollars は通知を出さないので、ゲームの文言で知らせる
-            float dollars = Waves.CrateDollars(CrateDollarWavesForTest >= 0 ? CrateDollarWavesForTest : waves);
+            float dollars = Waves.CrateDollars(CrateDollarWavesForTest >= 0 ? CrateDollarWavesForTest : waves, hard);
             if (dollars > 0f)
             {
                 try { inv.AddDollars(dollars); } catch (Exception e) { Main.Log("[arena] crate dollars failed: " + e.Message); }
@@ -1327,7 +1355,7 @@ namespace FPSurvival
             switch (Now)
             {
                 case Phase.Prep:
-                    _hudTop.text = Main.T("サバイバル", "SURVIVAL") + $"   ${dollars:N0}";
+                    _hudTop.text = (Hard ? Main.T("サバイバル ハード", "SURVIVAL HARD") : Main.T("サバイバル", "SURVIVAL")) + $"   ${dollars:N0}";
                     _hudSub.text = Main.T($"ウェーブ 1 開始まで {Math.Max(0, _phaseUntil - now):0} 秒", $"Wave 1 starts in {Math.Max(0, _phaseUntil - now):0}s");
                     break;
                 case Phase.Wave:
@@ -1371,6 +1399,7 @@ namespace FPSurvival
         public static bool PlayerInRoomForTest => PlayerInRoom();
         public static IEnumerable<GameObject> CorpsesForTest => _enemies.Where(e => e.Dead && e.Root != null).Select(e => e.Root);
         public static WaveSpec? SpecForTest;
+        public static WaveSpec SpecNowForTest => _spec;
         public static void SetNextWaveForTest(int n) { Wave = n - 1; Cleared = Math.Max(Cleared, n - 1); }
         public static void SkipTimerForTest() => _phaseUntil = 0f;
         public static bool BossTemplateFound => _bossTemplate != null;

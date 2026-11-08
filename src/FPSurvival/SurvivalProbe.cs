@@ -73,7 +73,7 @@ namespace FPSurvival
         static List<(string, Action)> Steps2()
         {
             Arena.PrepSeconds = 600f;
-            var s = new List<(string, Action)> { ("start", () => { Tablet.SetPage(1); Object.FindObjectOfType<ButtonStartEndlessMode>()?.StartEndlessRun(); }) };
+            var s = new List<(string, Action)> { ("start", () => { Tablet.SetPage(1); Tablet.ChooseForTest(false); Object.FindObjectOfType<ButtonStartEndlessMode>()?.StartEndlessRun(); }) };
             Wait(s, 12, "wait load");
 
             Wait(s, 16, "wait rooftop");
@@ -163,7 +163,7 @@ namespace FPSurvival
             Arena.PrepSeconds = 6f; Arena.BreakSeconds = 300f; Arena.SpawnInterval = 1f;
             var s = new List<(string, Action)>
             {
-                ("start", () => { Tablet.SetPage(1); Object.FindObjectOfType<ButtonStartEndlessMode>()?.StartEndlessRun(); }),
+                ("start", () => { Tablet.SetPage(1); Tablet.ChooseForTest(false); Object.FindObjectOfType<ButtonStartEndlessMode>()?.StartEndlessRun(); }),
             };
             Wait(s, 12, "wait load");
 

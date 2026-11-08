@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -94,12 +94,15 @@ namespace FPRarity
             }
         }
 
+        static int _rayFrame; static double _rayMaxFrame;
         static void TimerPre(out long __state) => __state = Stopwatch.GetTimestamp();
 
         static void TimerPost(long __state, System.Reflection.MethodBase __originalMethod)
         {
             double ms = (Stopwatch.GetTimestamp() - __state) * 1000.0 / Stopwatch.Frequency;
-            var key = __originalMethod.DeclaringType.Name + "." + __originalMethod.Name;
+            var key = __originalMethod.DeclaringType.FullName.Replace("Il2Cpp", "") + "." + __originalMethod.Name;
+            if (ms > 8 && __originalMethod.DeclaringType != typeof(UnityEngine.Physics)) Main.Log($"[perf] slow {key} {ms:0.0}ms t={Time.time:0.00} bullets={Il2CppBallistics.BulletHandler.instance?.Bullets?.Count} raycast this frame max {_rayMaxFrame:0.0}ms mono gc {System.GC.CollectionCount(0)}/{System.GC.CollectionCount(1)}/{System.GC.CollectionCount(2)} il2cpp gc {Il2CppSystem.GC.CollectionCount(0)}");
+            if (__originalMethod.DeclaringType == typeof(UnityEngine.Physics)) { if (Time.frameCount != _rayFrame) { _rayFrame = Time.frameCount; _rayMaxFrame = 0; } if (ms > _rayMaxFrame) _rayMaxFrame = ms; }
             if (!_timed.TryGetValue(key, out var s)) _timed[key] = s = new Stat();
             s.Sum += ms; s.Calls++; if (ms > s.Max) s.Max = ms; if (ms > 2) s.Slow++;
         }
@@ -176,13 +179,17 @@ namespace FPRarity
             Main.Log(sb.ToString());
         }
 
-        public static List<(string, Action)> Steps(bool boss)
+        static bool _fight;
+
+        public static List<(string, Action)> Steps(bool boss, bool fight = false)
         {
+            _fight = fight;
             var steps = new List<(string, Action)>
             {
                 ("start endless run", (Action)(() =>
                 {
                     var force = Path.Combine(Main.Dir, "endless_boss.txt");
+                    if (fight) Type.GetType("FPCustom.NewPartsTest, FPCustom")?.GetMethod("LaserAll")?.Invoke(null, new object[] { "laser_blue", "p_laser" });
                     if (boss) File.WriteAllText(force, "50");
                     else { try { File.Delete(force); } catch { } EndlessBoss.ForceNormalForTest = true; }
                     var ff = Path.Combine(Main.Dir, "perf_floor.txt");   // 通常の階を何階として作るか（無ければゲームのまま）
@@ -193,7 +200,7 @@ namespace FPRarity
             for (int i = 0; i < 12; i++) steps.Add(("wait load", () => { }));
             steps.Add(("enter elevator + move", () => EndlessProbe.EnterAndMove()));
             for (int i = 0; i < 16; i++) steps.Add(("wait / pick card", EndlessProbe.PickCard));
-            steps.Add(("run", () => { MelonCoroutines.Start(Run(boss)); }));
+            steps.Add(("run", () => { MelonCoroutines.Start(_fight ? RunFight() : Run(boss)); }));
             for (int i = 0; i < 400; i++) steps.Add(("wait", () => { if (_done) TestMode.SkipWaitsForTest(); }));
             steps.Add(("cleanup", (Action)(() =>
             {
@@ -202,6 +209,187 @@ namespace FPRarity
                 EndlessBoss.ForceFloorForTest = -1;
             })));
             return steps;
+        }
+
+        // ---------- 撃ち合いの測定（perffight）：ボス＋雑魚の前に無敵で立ち、自分も撃ちながら、切り替えて比べる ----------
+        static bool _fireOn = true, _fightRun, _turnEachShot = true;
+        static double _fireMs, _hitMs; static int _fireN;
+
+        static void SetField(string type, string name, object v)
+        {
+            var t = Type.GetType(type);
+            var f = t?.GetField(name);
+            if (f != null) f.SetValue(null, v); else Main.Log($"[perf] {type}.{name} not there");
+        }
+
+        static Il2CppBallistics.LivingEntityCollider NearestPart(Vector3 from)
+        {
+            Il2CppBallistics.LivingEntityCollider best = null; float d = 1e9f;
+            foreach (var e in Main.FindAll<Il2CppBallistics.LivingEntity>())
+            {
+                if (e == null || e.EnemyHealth == null || e.IsDead || e.EnemyHealth.health <= 0f || !e.gameObject.activeInHierarchy) continue;
+                float dist = (e.transform.position - from).sqrMagnitude;
+                if (dist >= d) continue;
+                foreach (var c in e.GetComponentsInChildren<Il2CppBallistics.LivingEntityCollider>(true))
+                    if (c.gameObject.name.StartsWith("spine_02")) { best = c; d = dist; break; }
+            }
+            return best;
+        }
+
+        // 1 秒に 10 発：本物の弾（マズルの処理）と、近い敵の胸への当たり（血・ヒットマーカー）。ダメージは 0 に近くして敵を減らさない
+        static IEnumerator FireLoop()
+        {
+            var target = (Il2CppBallistics.LivingEntityCollider)null;
+            float nextFind = 0f;
+            while (_fightRun)
+            {
+                yield return new WaitForSeconds(0.1f);
+                if (!_fireOn) continue;
+                try
+                {
+                    var fps = Refs.Fps;
+                    var item = fps?.GetActiveItem();
+                    var dw = item?.gameObject?.GetComponent<Il2CppDemo.Scripts.Runtime.Item.Weapon>();
+                    var bw = item?.gameObject?.GetComponentInChildren<Il2CppBallistics.Weapon>(true);
+                    if (dw == null || bw == null) continue;
+                    bool find = nextFind == 0f;   // 探すのは重いので最初の 1 回だけ（測定の邪魔にならないように）
+                    if (find) { target = NearestPart(fps.transform.position); nextFind = 1f; }
+                    var c = target;
+                    if (c != null && (find || _turnEachShot)) { var flat = c.transform.position - fps.transform.position; flat.y = 0; fps.transform.rotation = Quaternion.LookRotation(flat); }
+                    float dmg = bw.MuzzleDamage; bw.MuzzleDamage = 0.01f;
+                    long t0 = Stopwatch.GetTimestamp();
+                    dw.hitManager.Fire();
+                    long t1 = Stopwatch.GetTimestamp();
+                    if (c != null) TestMode.Call(Il2CppBallistics.BulletHandler.instance, "BulletHit", bw, c, null, (c.transform.position - fps.transform.position).normalized, c.transform.position, bw.MaxBulletSpeed, 0f);
+                    long t2 = Stopwatch.GetTimestamp();
+                    bw.MuzzleDamage = dmg;
+                    _fireMs += (t1 - t0) * 1000.0 / Stopwatch.Frequency; _hitMs += (t2 - t1) * 1000.0 / Stopwatch.Frequency; _fireN++;
+                }
+                catch (Exception e) { Core.LogOnce("perffire", "[perf] fire failed: " + e); }
+            }
+        }
+
+        // シーンに居るスクリプトの Update / LateUpdate / FixedUpdate をすべて測る（どれが重いかを広く見る）
+        static void InstallSceneTimers()
+        {
+            var h = new HarmonyLib.Harmony("fprarity.perfscenetimers");
+            var byName = new Dictionary<string, Type>();
+            foreach (var a in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                if (!a.GetName().Name.StartsWith("Assembly-CSharp") && !a.GetName().Name.StartsWith("Il2Cpp") && !a.GetName().Name.Contains("RayFire") && !a.GetName().Name.Contains("Kinemation")) continue;
+                Type[] ts;
+                try { ts = a.GetTypes(); } catch (System.Reflection.ReflectionTypeLoadException e) { ts = e.Types.Where(t => t != null).ToArray(); }
+                foreach (var t in ts) byName[t.FullName] = t;
+            }
+            var seen = new HashSet<string>();
+            int n = 0;
+            foreach (var mb in UnityEngine.Object.FindObjectsOfType<MonoBehaviour>())
+            {
+                if (mb == null) continue;
+                var full = mb.GetIl2CppType().FullName;
+                if (full == null || !seen.Add(full)) continue;
+                if (!byName.TryGetValue("Il2Cpp" + full, out var t) && !byName.TryGetValue("Il2Cpp." + full, out t)) continue;
+                foreach (var m in new[] { "Update", "LateUpdate", "FixedUpdate" })
+                    if (HarmonyLib.AccessTools.DeclaredMethod(t, m) != null && SafePatcher.Patch(h, t, m, null, nameof(TimerPre), nameof(TimerPost), typeof(PerfProbe))) n++;
+            }
+            Main.Log($"[perf] scene timers: {n} methods on {seen.Count} script types");
+        }
+
+        static void InstallModTimers()
+        {
+            var h = new HarmonyLib.Harmony("fprarity.perfmodtimers");
+            var pre = new HarmonyLib.HarmonyMethod(typeof(PerfProbe), nameof(TimerPre));
+            var post = new HarmonyLib.HarmonyMethod(typeof(PerfProbe), nameof(TimerPost));
+            foreach (var (type, names) in new[]
+            {
+                ("FPCustom.Main, FPCustom", "OnUpdate"), ("FPModOption.ModOption, FPModOption", "OnUpdate"), ("FPRarity.Main, FPRarity", "OnUpdate"),
+                ("FPSurvival.Main, FPSurvival", "OnUpdate"), ("FPHitMarker.Main, FPHitMarker", "OnUpdate"), ("FPOptimize.Main, FPOptimize", "OnUpdate"),
+                ("FPCustom.Effects, FPCustom", "TickVgrip,TickKacSway,SyncMags,Tick"), ("FPCustom.LaserLab, FPCustom", "TickDot"), ("FPCustom.CustomUi, FPCustom", "Tick"),
+                ("FPHitMarker.Marker, FPHitMarker", "Show,Tick"), ("FPOptimize.AiSight, FPOptimize", "Pre"),
+                ("Il2CppBallistics.BulletHandler, Assembly-CSharp", "BulletHit,SpawnBloodDecals,UpdateBullets"), ("Il2Cpp.FPSFireManager, Assembly-CSharp", "Fire"),
+                ("Il2CppBallistics.LivingEntity, Assembly-CSharp", "OnHealthChanged"), ("Il2CppBallistics.Weapon, Assembly-CSharp", "ShootBullet"),
+                ("FPHitMarker.Hits, FPHitMarker", "Pre,Post"), ("Il2CppRayFire.RayfireRigid, Il2CppRayFireAssembly", "Demolish,ApplyDamage,Initialize,InitMeshFragments,Slice"), ("FPCustom.Effects, FPCustom", "BulletHit_Pre,BulletHit_Post"),
+                ("FPRarity.Mastery, FPRarity", "Flush"), ("FPRarity.Persistence, FPRarity", "Poll"),
+                ("Il2CppRayFire.RayfireGun, Il2CppRayFireAssembly", "ImpactRigid,ImpactRoot,ApplyDamage,VfxFlash,VfxDebris,VfxDust"),
+            })
+                foreach (var n in names.Split(','))
+                {
+                    var t = Type.GetType(type);
+                    var m = t == null ? null : HarmonyLib.AccessTools.Method(t, n);
+                    if (m == null) { Main.Log($"[perf] timer: {type} {n} not found"); continue; }
+                    try { h.Patch(m, pre, post); } catch (Exception e) { Main.Log($"[perf] timer {n} failed: {e.Message}"); }
+                }
+            foreach (var m in typeof(Physics).GetMethods().Where(x => x.Name == "RaycastAll"))
+                try { h.Patch(m, pre, post); } catch { }
+            foreach (var (tn, mn) in new[] { ("Il2CppBallistics.BulletHandler, Assembly-CSharp", "DeactivateBullet"), ("Il2Cpp.PoolManager, Assembly-CSharp", "AddObject"), ("Il2Cpp.PoolManager, Assembly-CSharp", "GetObject") })
+            {
+                var t = Type.GetType(tn); var m = t == null ? null : HarmonyLib.AccessTools.Method(t, mn);
+                if (m != null) try { h.Patch(m, pre, post); } catch { } else Main.Log($"[perf] timer: {tn} {mn} not found");
+            }
+            // RayfireGun.Shoot は 2 つある（同じ名前で引数が違う）
+            var rg = Type.GetType("Il2CppRayFire.RayfireGun, Il2CppRayFireAssembly");
+            if (rg != null)
+                foreach (var m in HarmonyLib.AccessTools.GetDeclaredMethods(rg).Where(x => x.Name == "Shoot"))
+                {
+                    try { h.Patch(m, pre, post); } catch (Exception e) { Main.Log($"[perf] timer Shoot failed: {e.Message}"); }
+                }
+        }
+
+        static IEnumerator RunFight()
+        {
+            _done = false;
+            var player = UnityEngine.Object.FindObjectsOfType<Il2CppBallistics.LivingEntity>().FirstOrDefault(e => e.PlayerHealthManager != null);
+            if (player != null) player.PlayerHealthManager.invincible = true;
+            EndlessProbe.PlaceInFrontOfBossesForTest(killGrunts: false);
+            StartPhaseStamps();
+            for (int i = 0; i < 4; i++) { Main.Log($"[perf] waiting enemies alive={AliveEnemies()}"); yield return new WaitForSeconds(2f); }
+            Inventory("start");
+            int cap = Application.targetFrameRate;
+            Application.targetFrameRate = -1;
+            _fightRun = true; _fireOn = true;
+            MelonCoroutines.Start(FireLoop());
+            var dots = UnityEngine.Object.FindObjectsOfType<LaserPoint>(true);
+            Main.Log($"[perf] fight: laser points {dots.Length}, weapon {Refs.Fps?.GetActiveItem()?.name}");
+            const string Cust = "FPCustom.Effects, FPCustom", Hit = "FPHitMarker.Marker, FPHitMarker";
+            var exps = new (string name, Action on, Action off)[]
+            {
+                ("turn with every shot", () => _turnEachShot = true, () => _turnEachShot = false),
+                ("hit marker off", () => SetField(Hit, "OffForTest", true), () => SetField(Hit, "OffForTest", false)),
+                ("FPCustom tick off", () => SetField(Cust, "TickOffForTest", true), () => SetField(Cust, "TickOffForTest", false)),
+                ("FPRarity tick off", () => SkipModTick = true, () => SkipModTick = false),
+                ("laser point off", () => { foreach (var d in dots) if (d != null) d.gameObject.SetActive(false); }, () => { foreach (var d in dots) if (d != null) d.gameObject.SetActive(true); }),
+                ("player not firing", () => _fireOn = false, () => _fireOn = true),
+                ("render scale x0.5", () => { var u = GraphicsSettings.currentRenderPipeline?.TryCast<UniversalRenderPipelineAsset>(); if (u != null) u.renderScale *= 0.5f; }, () => { var u = GraphicsSettings.currentRenderPipeline?.TryCast<UniversalRenderPipelineAsset>(); if (u != null) u.renderScale *= 2f; }),
+            };
+            InstallModTimers();
+            InstallSceneTimers();
+            Main.Log($"[perf] physics auto sync = {Physics.autoSyncTransforms}, incremental gc {UnityEngine.Scripting.GarbageCollector.isIncremental}, mode {UnityEngine.Scripting.GarbageCollector.GCMode}, mono heap {System.GC.GetTotalMemory(false) / 1048576} MB, mono gc {System.GC.CollectionCount(0)}/{System.GC.CollectionCount(1)}");
+            // 敵が減ると比べられないので、倒れないようにする
+            foreach (var e in Main.FindAll<Il2CppBallistics.LivingEntity>())
+                if (e != null && e.EnemyHealth != null && e.EnemyHealth.health > 0f) { e.StartHealth = 1e7f; e.Health = 1e7f; e.EnemyHealth.health = 1e7f; }
+            for (int i = 0; i < 3; i++) yield return Measure("fight baseline", 6f);
+            var abFile = Path.Combine(Main.Dir, "perf_ab.txt");
+            string only = File.Exists(abFile) ? File.ReadAllText(abFile).Trim() : null;   // 中身があれば、その名前を含む切り替えだけ（| で複数）
+            for (int round = 0; only != null && round < 3; round++)
+                foreach (var (name, on, off) in exps)
+                {
+                    if (only.Length > 0 && !only.Split('|').Any(name.Contains)) continue;
+                    try { on(); } catch (Exception e) { Main.Log($"[perf] {name} failed: {e.Message}"); }
+                    yield return new WaitForSeconds(0.5f);
+                    yield return Measure(name, 6f);
+                    try { off(); } catch (Exception e) { Main.Log($"[perf] {name} failed: {e.Message}"); }
+                    yield return new WaitForSeconds(0.5f);
+                    yield return Measure("fight baseline", 6f);
+                }
+            _timed.Clear(); _fireMs = _hitMs = 0; _fireN = 0;
+            yield return Measure("with method timers", 15f);
+            ReportTimers(15f);
+            Main.Log($"[perf] per shot: Fire {_fireMs / Math.Max(1, _fireN):0.00} ms, BulletHit call {_hitMs / Math.Max(1, _fireN):0.00} ms ({_fireN} shots)");
+            _fightRun = false;
+            Main.Log($"[perf] enemies alive at the end: {AliveEnemies()}");
+            Application.targetFrameRate = cap;
+            Inventory("end");
+            _done = true;
         }
 
         static IEnumerator Run(bool boss)

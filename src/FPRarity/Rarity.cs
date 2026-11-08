@@ -40,14 +40,14 @@ namespace FPRarity
     // ・同じレアリティなら同じくらいの強さになるよう、実際に出せる DPS（ダメージ×連射）をレアリティごとの基準値に合わせる。
     //   - セミオートは1発ずつクリックするので、連射は「武器の連射速度」と「人が連打できる速さ（毎分 420 発）」の小さい方で計算する。
     //     バーストも同様に毎分 600 発を上限にする
-    //   - 当てやすい武器（コントロールが高い）ほど DPS を下げ、反動が大きく当てにくい武器ほど上げる
+    //   - 当てやすい武器（実際の反動で決まるコントロールが高い）ほど DPS を下げ、反動が大きく当てにくい武器ほど上げる
     //     （コントロールの基準値との差 1 につき 0.8%、+30%〜-20%）。コントロール自体は基準値へ半分だけ寄せて武器の個性を残す
     //   - マガジンが小さい武器は、武器の個性に合わせた性能で補う（基準 メイン30発・サブ15発、(基準/弾数)^0.25）
     //       一撃型（8発以下、またはセミオート・バースト）… ダメージを上乗せ
     //       連射型（フルオートで弾数が少ない：VAL、Swiss 751、"Beater" MPS-5 など）… コントロールを上乗せ（短い連射を当てやすく）
     //   - ダメージの上乗せ（マガジン×コントロール）は合わせて最大 1.35 倍
     // ・1発のダメージはバニラの最高（約250）を中心値の上限にする。抽選の上振れで少し超えるのはよい
-    // ・最後はレジェンダリーの厳選になるので、抽選の幅は大きめ（ダメージ ±12%、コントロール・エルゴ ±8）
+    // ・最後はレジェンダリーの厳選になるので、抽選の幅は大きめ（ダメージ ±12%、コントロール・エルゴ ±15）
     // ・連射の増減は ±5% までに抑え、強さの差は主にダメージで付ける（連射＝武器の個性として残す）
     // ・エルゴはバニラでレアリティと相関がないので、元の値から1段階 ±5 だけ動かす
     // ・ハンドガン（サブ武器）はクリックで撃つので連射を変えても意味が薄い。連射は元のまま、代わりにリロードの速さを ±10% で抽選する
@@ -55,13 +55,35 @@ namespace FPRarity
     {
         static readonly System.Random Rng = new();
 
-        public const int BalanceVersion = 11;   // 10: 連射速度にも ±8% の個体差 / 11: ハンドガンは連射の代わりにリロード速度
+        // 10: 連射速度にも ±8% の個体差 / 11: ハンドガンは連射の代わりにリロード速度
+        // 12: DPS の補正を実際の反動のコントロールで計算（以前はゲームの元の表示の値）。VAL のダメージを上乗せ
+        // 13: 個別調整。Eagle はコントロール、TT はリロードとエルゴ、G-18C はコントロールとダメージ、Hunter 2種はリロード
+        // 14: VAL のダメージの上乗せを 1.3 倍から 1.15 倍に下げる（短い撃ち合いで他の武器を引き離しすぎた）
+        // 15: G-18C のコントロールの上乗せを +25 から +10 に下げ、ダメージを 1.25 倍から 1.3 倍に上げる
+        public const int BalanceVersion = 15;
         const int RpgId = 26;              // ロケットランチャーは補正対象外
+        const int ValId = 14;
+        const float ValDamageBonus = 1.15f; const float ValDamageBonusV13 = 1.3f; // VAL は 20 発をすぐ撃ち切るので、コントロールの上乗せに加えてダメージも上げる
 
         //                                            Common Uncommon Rare  Elite  Legendary
         // 1発のダメージがバニラの最高（約250）を超えないよう、全体を下げてある（v7。以前は Legendary メイン 2750）
         static readonly float[] MainDps   = {          750,   950,   1200, 1600,  2000 };
         static readonly float[] SubDps    = {          480,   650,    850, 1100,  1350 };
+        // 武器ごとの個別調整（弾数・反動で DPS の基準では補えない分）。DPS の基準の計算の後に足す
+        const int EagleId = 5, TtId = 6, G18Id = 13, Hunter32Id = 18, Hunter12Id = 19, Cv1Id = 23;
+        //   武器の特性は残す：Eagle はハンドガンで反動が一番大きく1発が一番重い。Hunter-32 はメイン武器で1発が一番重い
+        //   1発の中心値は個別調整を含めて 300 まで
+        static readonly int[] EagleControl     = {      14,    14,     15,   14,    14 };
+        static readonly int[] Cv1Control       = {       9,    10,     13,   15,    20 };
+        static readonly float[] EagleDamage    = {   1.25f, 1.25f,  1.25f, 1.25f,  1.2f };
+        static readonly float[] Cv1Damage      = {    1.1f,  1.1f,   1.1f,  1.1f,  1.1f };
+        static readonly float[] Hunter32Damage = {      1f,    1f,     1f,  1.1f,  1.2f };
+        static readonly float[] Hunter12Damage = {      1f,    1f,     1f, 1.05f,  1.1f };
+        static readonly float[] TtReload       = {    1.2f,  1.2f,  1.25f, 1.4f,  1.5f };
+        static readonly float[] Hunter32Reload = {    1.3f,  1.4f,   1.7f, 2.0f,  2.0f };
+        static readonly float[] Hunter12Reload = {    2.0f,  2.0f,   2.2f, 2.5f,  2.5f };
+        const int TtErgo = 12, G18Control = 10, G18ControlV14 = 25;
+        const float G18Damage = 1.3f, G18DamageV14 = 1.25f;
         public const float MaxShotDamage = 250f;  // 1発のダメージの中心値の上限（バニラの最高 Hunter-32 と同じ）。抽選の上振れで少し超えるのはよい
         static readonly float[] Control   = {           20,    40,     65,   85,   100 };
         const float DpsJitter = 0.12f;     // ダメージのばらつき ±12%（厳選の幅）
@@ -76,7 +98,8 @@ namespace FPRarity
         const float BurstRpmCap = 600f;           // バースト
         const int MainRefMag = 30, SubRefMag = 15;
         const int ErgoPerTier = 5;         // Rare を ±0 として1段階ごとのエルゴ増減
-        const float StatJitter = 8f;       // コントロール/エルゴの ±ばらつき（厳選の幅）
+        const float StatJitter = 8f;       // コントロールの抽選の値の幅。ダメージの補正にはこの値のまま使う
+        const float ShownJitter = 15f;     // コントロール/エルゴの表示の値での ±ばらつき（厳選の幅）
 
         // 出現重み（Common → Legendary）。深い階層ほど高レアが出やすくなる（10階で頭打ち）
         //   1階: 40/30/18/9/3   10階: 15/30/28/17/10
@@ -113,7 +136,7 @@ namespace FPRarity
             var wi = Tracker.ItemById(r.WeaponId);
             if (wi == null) return;
             var old = r.ToString();
-            if (r.Bal == 9 || r.Bal == 10)
+            if (r.Bal >= 9 && r.Bal <= 14)
             {
                 // 版9 → 10 は連射速度の個体差が増えただけ。ダメージ・コントロール・エルゴはそのままにして、連射速度だけ引く
                 if (r.Bal == 9)
@@ -122,11 +145,20 @@ namespace FPRarity
                     r.FireRateMult = Round2(r.FireRateMult * (1 - RpmJitter + (float)rng.NextDouble() * 2 * RpmJitter));
                 }
                 // 版10 → 11：ハンドガンは連射を元に戻し、リロード速度を引く（ダメージ・コントロール・エルゴはそのまま）
-                if (IsHandgun(wi))
+                if (r.Bal <= 10 && IsHandgun(wi))
                 {
                     var rng = new System.Random(StableSeed(r.Uid + "/reload"));
                     r.FireRateMult = 1f;
                     r.ReloadMult = Round2(1 - ReloadJitter + (float)rng.NextDouble() * 2 * ReloadJitter);
+                }
+                // 版11 → 12：ダメージの中心値の変化ぶんだけ掛ける（個体の当たり外れ・コントロール・エルゴ・連射はそのまま）
+                if (r.Bal <= 11) r.DamageMult = Round2(r.DamageMult * CenterChangeV12(wi, r.Tier));
+                if (r.Bal <= 12) ApplySpecial(r);
+                if (r.Bal is 12 or 13 && r.WeaponId == ValId) r.DamageMult = Round2(r.DamageMult * ValDamageBonus / ValDamageBonusV13);
+                if (r.Bal is 13 or 14 && r.WeaponId == G18Id)
+                {
+                    r.ControlDelta += G18Control - G18ControlV14;
+                    r.DamageMult = Round2(r.DamageMult * G18Damage / G18DamageV14);
                 }
                 r.Bal = BalanceVersion;
                 Main.Log($"[balance] {Tracker.NameOf(r.WeaponId)}: {old} -> {r}");
@@ -139,6 +171,36 @@ namespace FPRarity
         // 実際に出せる連射（セミオート・バーストは連打の速さが上限）
         public static float EffectiveRpm(Il2CppDemo.Scripts.Runtime.Item.Weapon dw, float rpm) =>
             dw.supportsAuto ? rpm : dw.supportsBurst ? Math.Min(rpm, BurstRpmCap) : Math.Min(rpm, SemiAutoRpmCap);
+
+        // 個別調整のうち、ロールに持つもの
+        static void ApplySpecial(WeaponRoll r)
+        {
+            int t = (int)r.Tier;
+            if (r.WeaponId == EagleId) r.ControlDelta += EagleControl[t];
+            if (r.WeaponId == Cv1Id) r.ControlDelta += Cv1Control[t];
+            if (r.WeaponId == TtId) r.ErgoDelta += TtErgo;
+            if (r.WeaponId == G18Id) r.ControlDelta += G18Control;
+            r.DamageMult = Round2(r.DamageMult * SpecialDamage(r.WeaponId, r.Tier));
+        }
+
+        public static float SpecialDamage(int weaponId, Tier tier) => weaponId switch
+        {
+            EagleId => EagleDamage[(int)tier],
+            Cv1Id => Cv1Damage[(int)tier],
+            G18Id => G18Damage,
+            Hunter32Id => Hunter32Damage[(int)tier],
+            Hunter12Id => Hunter12Damage[(int)tier],
+            _ => 1f,
+        };
+
+        // 個別調整のリロードの速さ（ロールには持たない。今の表をそのまま使う）
+        public static float ReloadBonus(int weaponId, Tier tier) => weaponId switch
+        {
+            TtId => TtReload[(int)tier],
+            Hunter32Id => Hunter32Reload[(int)tier],
+            Hunter12Id => Hunter12Reload[(int)tier],
+            _ => 1f,
+        };
 
         public static bool IsHandgun(Il2Cpp.WeaponItem wi) => wi != null && wi.Type == Il2Cpp.WeaponItem.SlotType.Small;
 
@@ -174,7 +236,39 @@ namespace FPRarity
 
         // 狙う DPS（ばらつきなしの中心値。control はマガジンの上乗せ前のコントロール）。テスト用
         public static float TargetDps(Il2Cpp.WeaponItem wi, Tier t, int control) =>
-            (wi.Type == Il2Cpp.WeaponItem.SlotType.Big ? MainDps : SubDps)[(int)t] * Math.Min(MagDamageFactor(wi) * ControlFactor(t, control), BonusCap);
+            (wi.Type == Il2Cpp.WeaponItem.SlotType.Big ? MainDps : SubDps)[(int)t] * Math.Min(MagDamageFactor(wi) * ControlFactor(t, control), BonusCap) * (wi.Id == ValId ? ValDamageBonus : 1f);
+
+        static readonly System.Collections.Generic.Dictionary<int, int> _realControl = new();   // 武器の種類ごとに決まる値（ツールチップで何度も使う）
+
+        // DPS の補正に使うコントロール（実際の反動から求めた値を基準値へ半分寄せる）。jitter は抽選のばらつき
+        public static int DpsControl(Il2Cpp.WeaponItem wi, Tier t, float jitter = 0f)
+        {
+            if (!_realControl.TryGetValue(wi.Id, out int real)) _realControl[wi.Id] = real = StatScale.ShownControl(StatScale.RecoilOf(wi.Weapon));
+            return Math.Max(0, (int)MathF.Round(real + (Control[(int)t] - real) * ControlPull + jitter));
+        }
+
+        // 版 11 から版 12 でダメージの中心値が何倍になるか
+        static float CenterChangeV12(Il2Cpp.WeaponItem wi, Tier t)
+        {
+            var dw = wi.Weapon;
+            var bw = dw?.GetComponentInChildren<Il2CppBallistics.Weapon>(true);
+            if (dw == null || bw == null || bw.MuzzleDamage <= 0 || dw.fireRate <= 0) return 1f;
+            int ctl = StatScale.OrigControl(wi);
+            int oldCtl = Math.Max(0, (int)MathF.Round(ctl + (Control[(int)t] - ctl) * ControlPull));
+            float oldTarget = (wi.Type == Il2Cpp.WeaponItem.SlotType.Big ? MainDps : SubDps)[(int)t] * Math.Min(MagDamageFactor(wi) * ControlFactor(t, oldCtl), BonusCap);
+            float b = bw.MuzzleDamage * EffectiveRpm(dw, dw.fireRate) / 60f;
+            float before = Center(oldTarget / b, wi, bw, out _);
+            return before > 0f ? Center(TargetDps(wi, t, DpsControl(wi, t)) / b, wi, bw, out _) / before : 1f;
+        }
+
+        // DPS の倍率 k を、連射（±5% まで）とダメージに分ける。返すのはダメージの中心値（1発 250 まで）
+        static float Center(float k, Il2Cpp.WeaponItem wi, Il2CppBallistics.Weapon bw, out float rpm)
+        {
+            var dw = wi.Weapon;
+            rpm = IsHandgun(wi) ? 1f : Math.Clamp(MathF.Pow(k, 0.05f), 0.95f, 1.05f);
+            float effGain = EffectiveRpm(dw, dw.fireRate * rpm) / EffectiveRpm(dw, dw.fireRate);
+            return Math.Min(k / effGain, MaxShotDamage / bw.MuzzleDamage);
+        }
 
         // a〜b の乱数を返す関数（抽選用）。平均の個体を求めるときは、常に真ん中を返す関数を使う
         static Func<float, float, float> Between(System.Random rng) => (a, b) => a + (float)rng.NextDouble() * (b - a);
@@ -187,6 +281,19 @@ namespace FPRarity
             return Compute(avg, wi, Middle) ? avg : null;
         }
 
+        // 抽選のばらつきの端をすべて組み合わせた個体（性能の下限・上限を調べる用）
+        public static System.Collections.Generic.List<WeaponRoll> Corners(Il2Cpp.WeaponItem wi, Tier t)
+        {
+            var list = new System.Collections.Generic.List<WeaponRoll>();
+            for (int mask = 0; mask < 16; mask++)
+            {
+                int i = 0, m = mask;
+                var r = new WeaponRoll { WeaponId = wi?.Id ?? -1, Tier = t, BaseTier = t };
+                if (Compute(r, wi, (a, b) => ((m >> i++) & 1) == 0 ? a : b)) list.Add(r);
+            }
+            return list;
+        }
+
         static bool Compute(WeaponRoll roll, Il2Cpp.WeaponItem wi, Func<float, float, float> R)
         {
             var dw = wi?.Weapon;
@@ -197,29 +304,30 @@ namespace FPRarity
             // コントロール：基準値へ半分寄せる（残りは武器の個性）。連射型でマガジンが小さい武器は、その分コントロールを上乗せ（DPS の計算には含めない）
             //   抽選は以前の単位（ゲームの元の表示の値・+1 = 反動 -1%）で行い、同じ強さの今の単位（StatScale）に直して持つ
             int ctl = StatScale.OrigControl(wi);
-            int rolledCtl = Math.Max(0, (int)MathF.Round(ctl + (Control[t] - ctl) * ControlPull + R(-StatJitter, StatJitter)));   // コントロール・エルゴに上限はない
-            roll.ControlDelta = (int)MathF.Round(StatScale.FromOld(Math.Max(0, rolledCtl + MagControlBonus(wi)) - ctl));
+            float ctlJitter = R(-StatJitter, StatJitter);
+            int rolledCtl = Math.Max(0, (int)MathF.Round(ctl + (Control[t] - ctl) * ControlPull));   // コントロール・エルゴに上限はない
+            roll.ControlDelta = (int)MathF.Round(StatScale.FromOld(Math.Max(0, rolledCtl + MagControlBonus(wi)) - ctl) + ctlJitter * ShownJitter / StatJitter);
 
             // 実際に出せる DPS を目標（中心値）に合わせる倍率 k を、ダメージと連射に分ける
-            float k = TargetDps(wi, roll.Tier, rolledCtl) / (bw.MuzzleDamage * EffectiveRpm(dw, dw.fireRate) / 60f);
+            //   反動の大きさの補正は、実際の反動で決まるコントロールで計算する（ゲームの元の表示の値は実際の反動と合っていない）
+            float k = TargetDps(wi, roll.Tier, DpsControl(wi, roll.Tier, ctlJitter)) / (bw.MuzzleDamage * EffectiveRpm(dw, dw.fireRate) / 60f);
             // 連射は ±5% まで（DPS 差のごく一部だけ）、残りはすべてダメージで調整する（連打が上限の武器は連射を上げても DPS は変わらない）
             //   ハンドガンは連射を変えない
             bool handgun = IsHandgun(wi);
-            float rpm = handgun ? 1f : Math.Clamp(MathF.Pow(k, 0.05f), 0.95f, 1.05f);
-            float effGain = EffectiveRpm(dw, dw.fireRate * rpm) / EffectiveRpm(dw, dw.fireRate);
             // ダメージの中心値はバニラの最高（250）まで。ばらつきはその後に掛ける（上振れで少し超えるのはよい）
-            float center = Math.Min(k / effGain, MaxShotDamage / bw.MuzzleDamage);
+            float center = Center(k, wi, bw, out float rpm);
             roll.DamageMult = Round2(Math.Max(0.2f, center * R(1 - DpsJitter, 1 + DpsJitter)));
             roll.FireRateMult = Round2(rpm);
 
             int erg = wi.Ergonomic;
-            int newErg = Math.Max(0, (int)MathF.Round(erg + (t - 2) * ErgoPerTier + R(-StatJitter, StatJitter)));
+            int newErg = Math.Max(0, (int)MathF.Round(erg + (t - 2) * ErgoPerTier + R(-ShownJitter, ShownJitter)));
             roll.ErgoDelta = newErg - erg;
 
             // 連射速度の個体差（抽選の順番を変えないよう最後に引く。古い版の武器を置き換えるときも他の値が変わらない）
             //   ハンドガンは連射の代わりにリロード速度の個体差
             if (handgun) { roll.FireRateMult = 1f; roll.ReloadMult = Round2(R(1 - ReloadJitter, 1 + ReloadJitter)); }
             else { roll.FireRateMult = Round2(rpm * R(1 - RpmJitter, 1 + RpmJitter)); roll.ReloadMult = 1f; }
+            ApplySpecial(roll);
             roll.Bal = BalanceVersion;
             return true;
         }
