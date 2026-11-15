@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using FPModOption;
 using UnityEngine;
+using Il2CppKINEMATION.FPSAnimationFramework.Runtime.Recoil;
 using DemoWeapon = Il2CppDemo.Scripts.Runtime.Item.Weapon;
 
 namespace FPCustom
@@ -55,6 +56,7 @@ namespace FPCustom
                 return s;
             };
             // レーザーの先の点の中身（色を替えたあと、何が赤のまま残るか）
+            TestMode.ExternalScenarios["custstockfx"] = StockFx;
             TestMode.ExternalScenarios["custdot"] = () =>
             {
                 // 点（LaserPoint）はランの中にしかないので、持っている武器すべてに緑のレーザーを付けてエンドレスに出る
@@ -105,6 +107,116 @@ namespace FPCustom
             return s;
         }
 
+        // 追加のストックの効果（Model 92 を手に持って）：VP70＝M16 の 3 点バースト・ハンドガンの動きなし、ウッド＝しゃがみ中の反動減、ワイヤー＝ポイントエイムで強く・通常のエイムで弱く
+        static int _ammo0;
+        static bool _safe, _consume;
+        static List<(string, Action)> StockFx()
+        {
+            const int P = 7;
+            var s = new List<(string, Action)>();
+            void W(int n = 1) { for (int i = 0; i < n; i++) s.Add(("wait", () => { })); }
+            s.Add(("setup", () => { ResetAll(P); Hold(P); })); W();
+            s.Add(("equip", () => Equip(P))); W(3);
+            s.Add(("vp70", () => { Store.SetForTest(P, Cat.Stock, "p_poly_stock"); Tracker.ApplyAll(); })); W(2);
+            s.Add(("vp70 check", () =>
+            {
+                var dw = Active();
+                Main.Log("[test] burst " + Effects.BurstForTest(dw));
+                var m16 = Tracker.ItemById(10)?.Weapon?.gameObject?.GetComponent<DemoWeapon>();
+                Check($"VP70 stock: 3-round burst from the M16 ({Effects.BurstForTest(dw)})", dw != null && m16 != null && dw._fireMode == FireMode.Burst && dw.supportsBurst && dw.burstLength == (m16.burstLength > 0 ? m16.burstLength : 3) && Mathf.Abs(dw.fireRate - m16.fireRate) < 0.5f);
+                Check("VP70 stock: pistol movement off (same as the M93R stock)", FPModOption.Link.MobileOverride?.Invoke() == false);
+                var st = Effects.Stats(Catalog.Get("p_poly_stock"), P).ToList();
+                Check($"VP70 stock: Control +3 only", st.Count == 1 && st[0].Stat == FPModOption.WeaponStat.Control && st[0].Value == 3f);
+                var m = dw.SelectedMag; if (m != null) m.AmmoCount = 12; _ammo0 = m?.AmmoCount ?? 0;
+                // 拠点では撃てない・弾が減らない。撃つ間だけ外す
+                _safe = Refs.Fps.inSafeZone; _consume = Refs.Fps.consumeAmmo; Refs.Fps.inSafeZone = false; Refs.Fps.consumeAmmo = true;
+                dw.OnFirePressed();
+            }));
+            s.Add(("release", () => Active()?.OnFireReleased())); W(1);
+            s.Add(("burst fired", () =>
+            {
+                int fired = _ammo0 - (Active()?.SelectedMag?.AmmoCount ?? _ammo0);
+                Refs.Fps.inSafeZone = _safe; Refs.Fps.consumeAmmo = _consume;
+                Check($"VP70 stock: one trigger pull fires {fired} rounds", fired == Active().burstLength);
+                Store.SetForTest(P, Cat.Stock, "p_wood_stock"); Tracker.ApplyAll(); Effects.CrouchOverrideForTest = false;
+            })); W(2);
+            s.Add(("wood stand", () =>
+            {
+                var dw = Active();
+                Check($"wood stock: burst removed ({Effects.BurstForTest(dw)})", dw._fireMode != FireMode.Burst && !dw.supportsBurst);
+                Check("wood stock: pistol movement back", FPModOption.Link.MobileOverride?.Invoke() == null);
+                Effects.LiveUsedForTest(dw, P, out _scaleStand);
+                Effects.CrouchOverrideForTest = true;
+            })); W(2);
+            s.Add(("wood crouch", () =>
+            {
+                bool used = Effects.LiveUsedForTest(Active(), P, out float crouch);
+                Effects.CrouchOverrideForTest = null;
+                Check($"wood stock: recoil lower while crouching ({_scaleStand:0.###} -> {crouch:0.###}, live {used})", used && crouch < _scaleStand * 0.75f);
+                var st = Effects.Stats(Catalog.Get("p_wood_stock"), P).ToList();
+                Check("wood stock: Control -5 only", st.Count == 1 && st[0].Stat == FPModOption.WeaponStat.Control && st[0].Value == -5f);
+                Store.SetForTest(P, Cat.Stock, "p_frame_stock"); Tracker.ApplyAll();
+            })); W(2);
+            // ワイヤーストック：ポイントエイムでコントロール +20・エルゴ +25、通常のエイムでコントロール -15・エルゴ -20、腰だめは変わらない
+            float[] scale = new float[3], ergo = new float[3]; bool[] live = new bool[3];
+            foreach (var k in new[] { Effects.AimKind.Hip, Effects.AimKind.Normal, Effects.AimKind.Point })
+            {
+                s.Add(($"wire {k}", () => Effects.AimOverrideForTest = k)); W(1);
+                s.Add(($"wire {k} read", () => { int i = (int)k; live[i] = Effects.LiveUsedForTest(Active(), P, out scale[i]); ergo[i] = FPModOption.AdsSpeed.ExtraErgo?.Invoke(P) ?? float.NaN; }));
+            }
+            s.Add(("wire lean", () =>
+            {
+                var dw = Active();
+                Effects.AimOverrideForTest = null;
+                Check($"wire stock: recoil live, point aim lower and normal aim higher than hip ({scale[2]:0.###} < {scale[0]:0.###} < {scale[1]:0.###})", live.All(x => x) && scale[2] < scale[0] && scale[0] < scale[1]);
+                // 元の値（熟練度・ほかのアタッチメント）に足す。エルゴの元＝腰だめ（次に構えるのは通常の照準）の値 + 20
+                float bc = Effects.LivePointsForTest(dw, P), be = ergo[0] + 20f;
+                Check($"wire stock: control +20 point aim, -15 normal aim over base {bc} (point {scale[2]:0.###} = {Effects.ScaleForTest(bc + 20f):0.###}, normal {scale[1]:0.###} = {Effects.ScaleForTest(bc - 15f):0.###}, hip {scale[0]:0.###} = {Effects.ScaleForTest(bc):0.###})", Mathf.Abs(scale[2] - Effects.ScaleForTest(bc + 20f)) < 1e-3f && Mathf.Abs(scale[1] - Effects.ScaleForTest(bc - 15f)) < 1e-3f && Mathf.Abs(scale[0] - Effects.ScaleForTest(bc)) < 1e-3f);
+                Check($"wire stock: ergonomics +25 point aim, -20 normal aim over base {be} (point {ergo[2]}, normal {ergo[1]})", ergo[2] == be + 25f && ergo[1] == be - 20f);
+                _ergoBase = be;
+                var before = Effects.MoveSwayScaleForTest(dw);
+                Effects.LeanOverrideForTest = true; Effects.Tick(); var leanS = Effects.MoveSwayScaleForTest(dw);
+                Effects.LeanOverrideForTest = null; Effects.Tick();
+                Check($"wire stock: no lean effect any more ({before} -> {leanS})", leanS == before);
+                var st = Effects.Stats(Catalog.Get("p_frame_stock"), P).ToList();
+                Check("wire stock: no fixed stats", st.Count == 0);
+                var notes = string.Join(" / ", Catalog.Get("p_poly_stock").Notes.Select(n => n.Ja)) + " | " + string.Join(" / ", Catalog.Get("p_frame_stock").Notes.Select(n => n.Ja)) + " | " + string.Join(" / ", Catalog.Get("p_wood_stock").Notes.Select(n => n.Ja));
+                Check($"stock notes have no brackets ({notes})", !notes.Contains("(") && !notes.Contains("（"));
+            }));
+            // 本当のポイントエイム：構えて、ホイールのクリック（cycle scope）で 2 つ目の照準へ
+            s.Add(("point aim", () => { Refs.Fps.OnAim(true); })); W(2);
+            s.Add(("point cycle", () => { Active()?.OnCycleScope(); })); W(2);
+            s.Add(("point check", () =>
+            {
+                Effects.Tick();
+                Check($"wire stock: wheel click while aiming is point aim (scope {Active()?._scopeIndex}, {Effects.AimForTest}, ergo {FPModOption.AdsSpeed.ExtraErgo?.Invoke(P)})", Effects.AimForTest == Effects.AimKind.Point && FPModOption.AdsSpeed.ExtraErgo?.Invoke(P) == _ergoBase + 25f);
+                Refs.Fps.OnAim(Refs.Fps.toggleAim);
+            })); W(2);
+            s.Add(("point after release", () =>
+            {
+                Main.Log($"[test] point aim after releasing aim: scope {Active()?._scopeIndex}, ergo {FPModOption.AdsSpeed.ExtraErgo?.Invoke(P)}");
+                Refs.Fps.OnAim(true);
+            })); W(2);
+            s.Add(("point reaim", () =>
+            {
+                Effects.Tick();
+                Main.Log($"[test] aim again after point aim: scope {Active()?._scopeIndex}, {Effects.AimForTest}");
+                if (Active()?._scopeIndex != 0) Active()?.OnCycleScope();
+            })); W(1);
+            s.Add(("normal check", () =>
+            {
+                Effects.Tick();
+                Check($"wire stock: back to normal aim (scope {Active()?._scopeIndex}, {Effects.AimForTest})", Effects.AimForTest == Effects.AimKind.Normal);
+                Refs.Fps.OnAim(Refs.Fps.toggleAim);
+            })); W(2);
+            // ストックを外したら、構えの設定（カメラを寄せる・寄せる骨）がハンドガンの元の値に戻る
+            s.Add(("stock on check", () => Check($"stocked pistol: camera goes to the sights (blend {Stance.CameraBlendForTest(Active())}, bone {Stance.AimBoneForTest})", Stance.CameraBlendForTest(Active()) == 1f && Stance.AimBoneForTest == "Camera")));
+            s.Add(("stock off", () => { ResetAll(P); Tracker.ApplyAll(); })); W(2);
+            s.Add(("stock off check", () => Check($"no stock: pistol aim settings restored (blend {Stance.CameraBlendForTest(Active())}, bone {Stance.AimBoneForTest})", Stance.CameraBlendForTest(Active()) == 0f && Stance.AimBoneForTest == "CameraSocket")));
+            s.Add(("cleanup", () => { ResetAll(P); Tracker.ApplyAll(); Refs.Bag.MoveWeaponToStash(Tracker.ItemById(P)); }));
+            return s;
+        }
+
         static void ResetAll(int id) { foreach (var c in Catalog.CatsFor(id)) Store.SetForTest(id, c, null); }
 
         static void Hold(int id)
@@ -125,7 +237,7 @@ namespace FPCustom
                 if (inst[i] != null && inst[i].gameObject.name.Replace("(Clone)", "").Trim() == pn) { Refs.Fps.StartWeaponChange(i); return; }
         }
 
-        static float _rate0;
+        static float _rate0, _ergoBase;
         static float _scaleStand;
 
         static void DumpDot(int id, string g)
@@ -273,14 +385,17 @@ namespace FPCustom
                 Effects.MovingOverrideForTest = false; float still = AdsSpeed.ExtraErgo(E);
                 Effects.MovingOverrideForTest = true; float moving = AdsSpeed.ExtraErgo(E);
                 Effects.MovingOverrideForTest = null;
-                // KAC グリップ：リーン中は移動の揺れの倍率が 0、リーンをやめると元に戻る
-                var before = Effects.MoveSwayScaleForTest(dw); float bob0 = Effects.AdsBobForTest(dw);
+                // KAC グリップ：ワイヤーストックと同じ（ポイントエイムでエルゴ +25、通常のエイムで -20。リーンの効果は無い）
+                var before = Effects.MoveSwayScaleForTest(dw);
                 Store.SetForTest(E, Cat.Grip, "kac_grip");
-                Effects.LeanOverrideForTest = true; Effects.Tick(); var leanS = Effects.MoveSwayScaleForTest(dw); float bobL = Effects.AdsBobForTest(dw);
-                Effects.LeanOverrideForTest = false; Effects.Tick(); var after = Effects.MoveSwayScaleForTest(dw); float bobA = Effects.AdsBobForTest(dw);
-                Effects.LeanOverrideForTest = null;
-                Check($"KAC grip: move sway off while leaning ({before} -> {leanS} -> {after})", before.sqrMagnitude > 0f && leanS == Vector3.zero && after == before);
-                Check($"KAC grip: aim walk bob off while leaning ({bob0} -> {bobL} -> {bobA})", bob0 > 0f && bobL == 0f && bobA == bob0);
+                Effects.LeanOverrideForTest = true; Effects.Tick(); var leanS = Effects.MoveSwayScaleForTest(dw);
+                Effects.LeanOverrideForTest = null; Effects.Tick();
+                Effects.AimOverrideForTest = Effects.AimKind.Point; float kp = AdsSpeed.ExtraErgo(E);
+                Effects.AimOverrideForTest = Effects.AimKind.Normal; float kn = AdsSpeed.ExtraErgo(E);
+                Effects.AimOverrideForTest = null;
+                var kst = Effects.Stats(Catalog.Get("kac_grip"), E).ToList(); var knotes = Effects.Notes(Catalog.Get("kac_grip"), E).Select(n => n.Ja).ToList();
+                Check($"KAC grip: no lean effect any more ({before} -> {leanS})", leanS == before);
+                Check($"KAC grip: same as the wire stock (point ergo {kp}, normal {kn}, stats {kst.Count}, notes {string.Join(" / ", knotes)})", kp - kn == 45f && kst.Count == 0 && knotes.SequenceEqual(Effects.Notes(Catalog.Get("p_frame_stock"), 7).Select(n => n.Ja)));
                 Store.SetForTest(E, Cat.Grip, grip0);
                 Check($"stubby grip: ergo still {still:0} moving {moving:0}", Mathf.Approximately(still, -5f) && Mathf.Approximately(moving, 10f));
                 Check($"arrowhead brake: arm x{arm} hand x{hand} leg x{leg} chest x{chest}", Mathf.Approximately(arm, 1f) && Mathf.Approximately(hand, 1f) && leg == Effects.LegMult && chest == 1f);

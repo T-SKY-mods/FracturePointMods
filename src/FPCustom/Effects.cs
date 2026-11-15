@@ -37,11 +37,15 @@ namespace FPCustom
         public const int CompShots = 5;              // コンペンセイター：引き金を引いてから何発目までコントロールが上がるか
         public static readonly float CompBonus = Old(20f);   // コンペンセイター：その間のコントロール（7）
         public const float BipodControl = 15f;       // バイポッド：しゃがんでいる間のコントロール
+        // ワイヤーストック：ポイントエイム（構えてからホイールのクリックで切り替える 2 つ目の照準＝Weapon._scopeIndex が 0 以外）と通常のエイム
+        public const float PointControl = 20f, PointErgo = 25f, NormalControl = -15f, NormalErgo = -20f;
         public const float BoosterRate = 1.15f;      // フラッシュコーン：連射速度
         public const float LinCompDamage = 15f;      // リニアコンペンセイター：ダメージ +15（固定値）
         public const float LegMult = 0.5f;   // アローヘッドブレーキ：敵の腕（肩〜手。ゲームは 0.1〜0.4 倍）は胴体と同じ 1 倍に（ArmFull）、脚（1 倍）は 0.5 倍に
         // 撃っている間・動きに合わせて反動を毎フレーム変えるもの（武器ごとの専用の複製を使う）
-        static readonly string[] LiveAtts = { "vertical_grip", "p_compensator", "muzzle_brake", "bipod" };
+        static readonly string[] LiveAtts = { "vertical_grip", "p_compensator", "muzzle_brake", "bipod", "p_wood_stock", "p_frame_stock", "kac_grip" };
+        // ポイントエイムで強く、通常のエイムで弱いもの（ワイヤーストック・KAC グリップ）
+        static readonly string[] PointAtts = { "p_frame_stock", "kac_grip" };
 
         // 以前の単位（+1 = 反動 -1%）で決めた値を、表示の単位（StatScale）の整数に直す
         static float Old(float oldPoints) => MathF.Round(StatScale.FromOld(oldPoints));
@@ -65,13 +69,23 @@ namespace FPCustom
             D("vertical_grip", new[] { (Stat.Control, Old(-8f)) }, ("連射中1発ごとに反動-2%", "Recoil -2% per shot while firing", true));
             D("angled_grip", new[] { (Stat.Ergo, -5f) }, ("スライディング後の硬直なし", "No stiffness after sliding", true), ("ダッシュ中とスライディング中にエイム射撃", "Aim and fire while sprinting or sliding", true));
             D("p_stock", none, ("フルオート500RPM", "Full auto 500 RPM", true), ("移動速度-5%", "Move speed -5%", false), ("スライディング後に硬直", "Stiffness after sliding", false), ("ダッシュ中とスライディング中のエイム射撃不可", "No aiming while sprinting or sliding", false));
+            // VP70 ストック：M16 の 3 点バースト。マイナスは M93R ストックと同じ（ハンドガンの動きを取り除く）
+            D("p_poly_stock", new[] { (Stat.Control, 3f) }, ("3点バースト", "3-round burst", true), ("移動速度-5%", "Move speed -5%", false), ("スライディング後に硬直", "Stiffness after sliding", false), ("ダッシュ中とスライディング中のエイム射撃不可", "No aiming while sprinting or sliding", false));
+            // ワイヤーストック・KAC グリップ：ポイントエイムで強く、通常のエイムで弱い（腰だめは変わらない）
+            foreach (var id in PointAtts)
+                D(id, none,
+                    ($"ポイントエイム時コントロール+{PointControl:0}", $"Control +{PointControl:0} when point aiming", true),
+                    ($"ポイントエイム時エルゴノミクス+{PointErgo:0}", $"Ergonomics +{PointErgo:0} when point aiming", true),
+                    ($"通常エイム時コントロール{NormalControl:0}", $"Control {NormalControl:0} when aiming normally", false),
+                    ($"通常エイム時エルゴノミクス{NormalErgo:0}", $"Ergonomics {NormalErgo:0} when aiming normally", false));
+            // ウッドストック：バイポッドと同じ（しゃがみ中コントロール +15）
+            D("p_wood_stock", new[] { (Stat.Control, -5f) }, ($"しゃがみ中コントロール+{BipodControl:0}", $"Control +{BipodControl:0} while crouching", true));
             foreach (var id in new[] { "ext_mag", "p_ext_mag" })
                 D(id, new[] { (Stat.Control, Old(5f)) }, ("マガジン容量1.5倍", "Magazine capacity x1.5", true), ("弾込め速度-15%", "Loading speed -15%", false));
             foreach (var id in new[] { "fast_mag", "p_fast_mag" })
                 D(id, new[] { (Stat.Ergo, 8f) }, ("リロード速度+20%", "Reload speed +20%", true), ("弾込め速度-15%", "Loading speed -15%", false));
             D("swiss_scope", new[] { (Stat.Ergo, -20f) }, ("胸の倍率アップ", "Chest multiplier up", true));
             D("bipod", new[] { (Stat.Control, -5f) }, ($"しゃがみ中コントロール+{BipodControl:0}", $"Control +{BipodControl:0} while crouching", true));
-            D("kac_grip", new[] { (Stat.Ergo, -5f) }, ("リーン中手ブレ無効", "No sway while leaning", true));
             D("stubby_grip", new[] { (Stat.Ergo, -5f) }, ($"移動中エルゴノミクス+{StubbyMoveErgo:0}", $"Ergonomics +{StubbyMoveErgo:0} while moving", true));
             foreach (var id in new[] { "arrowhead", "p_arrowhead" })
                 D(id, none, ("腕へのダメージ1倍", "Arm damage x1", true), ($"脚へのダメージ{LegMult:0.#}倍", $"Leg damage x{LegMult:0.#}", false));
@@ -85,6 +99,14 @@ namespace FPCustom
         }
 
         // 武器ごとの違い：G-18C の M93R ストックはフルオート 500RPM の代わりに、連射速度 -50%・コントロール +50（マイナスの効果は同じ）
+        // リーン中の手ぶれ・揺れなし：今は付けているものなし（2026-11-15 に KAC グリップ・ワイヤーストックから外した。仕組みは残す）
+        static readonly string[] Lean = { };
+        // VP70 ストックの 3 点バースト：M16 のバーストを使う
+        const int M16Id = 10;
+        static bool Burst(int id) => Has(id, "p_poly_stock") && Catalog.IsPistol(id);
+        static DemoWeapon M16() => Tracker.ItemById(M16Id)?.Weapon?.gameObject?.GetComponent<DemoWeapon>();
+        public static string BurstForTest(DemoWeapon w) => w == null ? "" : $"mode={w._fireMode} burst={w.supportsBurst}x{w.burstLength} rpm={w.fireRate:0} m16={M16()?.supportsBurst}x{M16()?.burstLength}@{M16()?.fireRate:0}";
+
         static bool G18Stock(Att a, int weaponId) => a?.Id == "p_stock" && weaponId == G18C;
 
         public static IEnumerable<(Stat Stat, float Value)> Stats(Att a, int weaponId)
@@ -169,8 +191,9 @@ namespace FPCustom
             Define();
             // 武器のステータス画面・比較のポップアップ（FPRarity）にアタッチメントの値を足す
             Link.ExtraDelta = Deltas;
-            AdsSpeed.ExtraErgo = id => Deltas(id).Ergo + (Has(id, "stubby_grip") && Moving() ? StubbyMoveErgo : 0f);   // スタビーグリップ：歩く・走る・スライディング中は構えが速い
-            Link.RpmShown = (id, rpm) => (Has(id, "p_stock") && Catalog.IsPistol(id) ? (id == G18C ? rpm * G18Rate : StockRpm) : rpm) * (Has(id, "flash_cone") ? BoosterRate : 1f);
+            AdsSpeed.ExtraErgo = id => Deltas(id).Ergo + (Has(id, "stubby_grip") && Moving() ? StubbyMoveErgo : 0f)   // スタビーグリップ：歩く・走る・スライディング中は構えが速い
+                + (Has(id, PointAtts) ? (PointTarget(id) ? PointErgo : NormalErgo) : 0f);                       // ワイヤーストック：構える先（ポイントエイム・通常のエイム）で
+            Link.RpmShown = (id, rpm) => (Has(id, "p_stock") && Catalog.IsPistol(id) ? (id == G18C ? rpm * G18Rate : StockRpm) : Burst(id) && M16() is { } m16 ? m16.fireRate : rpm) * (Has(id, "flash_cone") ? BoosterRate : 1f);
             Link.DamageShown = (id, dmg) => dmg + DamageAdd(id);
             Link.SyncMags = SyncMags;
             Link.ExtMagsForTest = on =>
@@ -187,7 +210,7 @@ namespace FPCustom
                 if (ptr == _mobileItem && _mobileVersion == Store.Version && Time.frameCount - _mobileFrame < 30) return _mobile;
                 _mobileItem = ptr; _mobileVersion = Store.Version; _mobileFrame = Time.frameCount;
                 Active(out int id);
-                if (Has(id, "p_stock")) _mobile = false;           // ハンドガンの動きを取り除く
+                if (Has(id, "p_stock", "p_poly_stock")) _mobile = false;           // ハンドガンの動きを取り除く
                 else if (Has(id, "angled_grip")) _mobile = true;   // メイン武器でもハンドガンの動き（移動速度は変わらない）
                 else _mobile = null;
                 return _mobile;
@@ -232,9 +255,21 @@ namespace FPCustom
 
             // M93R ストック：フルオート 500RPM（もともとフルオートの G-18C は連射速度が半分）。外したら元の撃ち方に戻す
             bool stock = Has(id, "p_stock");
+            Stance.Apply(dw, id);
             dw.supportsAuto = pdw.supportsAuto || stock;
             if (stock) dw.fireRate = id == G18C ? dw.fireRate * G18Rate : StockRpm;
             if (stock) dw._fireMode = FireMode.Auto;
+            // VP70 ストック：M16 の 3 点バースト（発数・連射速度を M16 から）。外したらゲームの値に
+            bool burst = Burst(id);
+            dw.supportsBurst = pdw.supportsBurst || burst;
+            dw.burstLength = pdw.burstLength;
+            if (burst && M16() is { } m16)
+            {
+                dw.burstLength = m16.burstLength > 0 ? m16.burstLength : 3;
+                dw.fireRate = m16.fireRate;
+                dw._fireMode = FireMode.Burst;
+            }
+            else if (!dw.supportsBurst && dw._fireMode == FireMode.Burst) dw._fireMode = FireMode.Semi;
             if (Has(id, "flash_cone")) dw.fireRate *= BoosterRate;
             // ダメージ（リニアコンペンセイター）：レアリティmod が当てた値に掛ける
             if (DamageAdd(id) != 0f && inst.GetComponentInChildren<Il2CppBallistics.Weapon>(true) is { } bw) bw.MuzzleDamage += DamageAdd(id);
@@ -247,7 +282,7 @@ namespace FPCustom
             // M93R ストックでフルオートにしたハンドガン：反動はその銃のものを元に、SP-320（見本）に寄せる（StockRecoilOf）
             var basePat = pdw.recoilPatternSettings; var baseAnim = pdw.recoilData;
             bool swap = false;
-            if (stock && !pdw.supportsAuto && Tracker.ItemById(StockRecoil)?.Weapon?.gameObject?.GetComponent<DemoWeapon>() is { } sp && sp != pdw)
+            if ((stock || burst) && !pdw.supportsAuto && Tracker.ItemById(StockRecoil)?.Weapon?.gameObject?.GetComponent<DemoWeapon>() is { } sp && sp != pdw)
             {
                 (basePat, baseAnim) = StockRecoilOf(id, pdw, sp);
                 swap = true;
@@ -319,7 +354,9 @@ namespace FPCustom
                 // 装備のときゲームは武器ごとに覚えた撃ち方（PlayerPrefs「名前+FireMode」）に戻す（CV-1 は "semi" が残っている）。
                 // M93R ストックならフルオートに。フルオートの無い武器に "auto" が残っていたらセミに
                 bool stock = id >= 0 && Has(id, "p_stock");
-                var want = stock ? FireMode.Auto : !__instance.supportsAuto && __instance._fireMode == FireMode.Auto ? FireMode.Semi : __instance._fireMode;
+                var want = stock ? FireMode.Auto : id >= 0 && Burst(id) ? FireMode.Burst
+                    : !__instance.supportsAuto && __instance._fireMode == FireMode.Auto ? FireMode.Semi
+                    : !__instance.supportsBurst && __instance._fireMode == FireMode.Burst ? FireMode.Semi : __instance._fireMode;
                 if (__instance._fireMode != want)
                 {
                     __instance._fireMode = want;
@@ -409,7 +446,7 @@ namespace FPCustom
         // 撃った弾数に合わせて毎フレーム書き換える（どちらも毎発その場で読むので、次の 1 発から効く）。
         // 撃った弾数は弾の減りで数える（キーの割り当て・パッドに関係なく）。次の弾が来ないまま連射の間隔の 2 倍がたったら、指を離した扱い
 
-        sealed class LiveRecoil { public RecoilPatternSettings Clone, Original; public RecoilAnimData AnimClone, AnimOriginal; public float Points; public bool Vgrip, Comp, Bipod; }
+        sealed class LiveRecoil { public RecoilPatternSettings Clone, Original; public RecoilAnimData AnimClone, AnimOriginal; public float Points; public bool Vgrip, Comp, Bipod, Wire; }
         static readonly Dictionary<string, LiveRecoil> _live = new();
         static int _shots, _lastAmmo;
         static float _lastShotAt;
@@ -431,7 +468,8 @@ namespace FPCustom
             l.Points = points;
             l.Vgrip = Has(id, "vertical_grip");
             l.Comp = Has(id, "p_compensator", "muzzle_brake");
-            l.Bipod = Has(id, "bipod");
+            l.Bipod = Has(id, "bipod", "p_wood_stock");
+            l.Wire = Has(id, PointAtts);
             SetLive(l, 0);
             return l;
         }
@@ -440,7 +478,8 @@ namespace FPCustom
         // コンペンセイター：撃った弾が CompShots 発より少ない間（次の弾が最初の CompShots 発のうち）は +CompBonus
         static float LiveScale(LiveRecoil l, int shots)
         {
-            float points = l.Points + (l.Comp && shots < CompShots ? CompBonus : 0f) + (l.Bipod && Crouching ? BipodControl : 0f);
+            float points = l.Points + (l.Comp && shots < CompShots ? CompBonus : 0f) + (l.Bipod && Crouching ? BipodControl : 0f)
+                + (l.Wire ? Aim switch { AimKind.Point => PointControl, AimKind.Normal => NormalControl, _ => 0f } : 0f);
             if (!l.Vgrip || shots <= 0) return Scale(points);
             return Mathf.Min(Scale(points), StatScale.RecoilMult(points + VgripPerShot * shots));
         }
@@ -461,6 +500,27 @@ namespace FPCustom
 
         // ---------- バイポッド：しゃがんでいる間 ----------
         static bool Crouching;
+        // ---------- ワイヤーストック：腰だめ・通常のエイム・ポイントエイム ----------
+        public enum AimKind { Hip, Normal, Point }
+        static AimKind Aim;
+        public static AimKind? AimOverrideForTest;
+        public static AimKind AimForTest => Aim;
+        public static float ScaleForTest(float points) => Scale(points);
+        // テスト：反動の複製の元のコントロール（熟練度・レアリティ・ほかのアタッチメントの合計）
+        public static float LivePointsForTest(DemoWeapon dw, int id) => dw != null && _live.TryGetValue(Link.Key(dw, id), out var l) ? l.Points : float.NaN;
+        static AimKind AimNow(DemoWeapon dw)
+        {
+            if (AimOverrideForTest is { } t) return t;
+            if (Refs.Fps == null || Refs.Fps._aimState != Il2CppDemo.Scripts.Runtime.Character.FPSAimState.Aiming) return AimKind.Hip;
+            return dw != null && dw._scopeIndex != 0 ? AimKind.Point : AimKind.Normal;
+        }
+        // 構える先がポイントエイムか（エルゴは構える速さ。腰だめのときは、次に構える照準で決める）
+        static bool PointTarget(int id)
+        {
+            if (AimOverrideForTest is { } t) return t == AimKind.Point;
+            var dw = Active(out int aid);
+            return dw != null && aid == id && dw._scopeIndex != 0;
+        }
         public static bool? CrouchOverrideForTest;
         public static float DamageAdd(int id) => Has(id, "p_linear_comp") ? LinCompDamage : 0f;
 
@@ -488,7 +548,7 @@ namespace FPCustom
             try
             {
                 Active(out int id);
-                if (id < 0 || !Has(id, "kac_grip")) return;
+                if (id < 0 || !Has(id, Lean)) return;
                 bool lean = LeanOverrideForTest ?? (Refs.Fps != null && Refs.Fps._isLeaning);
                 if (lean && __instance._tremorSettings != null) __instance._tremorSettings.alpha = 0f;
             }
@@ -505,7 +565,7 @@ namespace FPCustom
         static void TickKacSway()
         {
             var dw = Active(out int id);
-            bool on = dw != null && id >= 0 && Has(id, "kac_grip") && (LeanOverrideForTest ?? (Refs.Fps != null && Refs.Fps._isLeaning));
+            bool on = dw != null && id >= 0 && Has(id, Lean) && (LeanOverrideForTest ?? (Refs.Fps != null && Refs.Fps._isLeaning));
             var s = on ? LayerOf<Il2CppKINEMATION.FPSAnimationFramework.Runtime.Layers.SwayLayer.SwayLayerSettings>(dw) : null;
             if (_kacSway != null && (s == null || s.Pointer != _kacSway.Pointer)) { SetSwayScale(_kacSway, _kacPos, _kacRot); _kacSway = null; }
             if (s != null && _kacSway == null)
@@ -555,6 +615,7 @@ namespace FPCustom
             var dw = Active(out int id);
             if (dw == null || id < 0 || !Has(id, LiveAtts) || !_live.TryGetValue(Link.Key(dw, id), out var l) || l.Clone == null || l.Original == null) { _shots = 0; return; }
             Crouching = CrouchOverrideForTest ?? IsCrouching();
+            Aim = AimNow(dw);
             int ammo = dw.SelectedMag?.AmmoCount ?? 0;
             float gap = Mathf.Max(0.25f, 2f * 60f / Mathf.Max(60f, dw.fireRate));
             if (dw.Pointer != _shotWeapon) { _shotWeapon = dw.Pointer; _shots = 0; }

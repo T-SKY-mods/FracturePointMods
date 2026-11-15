@@ -37,6 +37,7 @@ namespace FPCustom
                 CustomUi.HookTooltip();
                 Mount.Install(HarmonyInstance);
                 Effects.Install(HarmonyInstance);
+                Stance.Install(HarmonyInstance);
                 Slide.UseRoles(HarmonyInstance);    // スライディング中の回避とメイン武器のエイム制限
                 Slide.UsePistol(HarmonyInstance);   // ハンドガンの動き（アタッチメントで変わる）
                 Parts.Install(HarmonyInstance);
@@ -62,6 +63,7 @@ namespace FPCustom
                 AdsLab.Register();
                 HandLab.Register();
                 AnimLab.Register();
+                StanceLab.Register();
                 Enabled = true;
                 Log("[init] OK");
             }
@@ -82,6 +84,7 @@ namespace FPCustom
             DebugMode.Tick();
             HandLab.Tick();
             AnimLab.Tick();
+            StanceLab.Tick();
             StatLab.Tick();
         }
 

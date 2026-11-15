@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using FPModOption;
 using UnityEngine;
@@ -89,6 +89,13 @@ namespace FPCustom
         //   （窓を部品全体に引き伸ばすと細かい汚れ・凹凸が消えて、のっぺりした樹脂のように見える）
         const int PatchWin = 12, PatchPx = 256;
         const float PatchMeters = 0.03f;
+        // 模様 1 枚の大きさ（m）。広い平らな面（樹脂のストック）は、細かい繰り返しが目立つので大きくして貼る。使ったら PatchMeters に戻す
+        public static float TileMeters = PatchMeters;
+        public static void ApplyPartWide(GameObject part, Transform gun, Role role, float meters, params int[] keepSubs)
+        {
+            TileMeters = meters;
+            try { ApplyPart(part, gun, role, keepSubs); } finally { TileMeters = PatchMeters; }
+        }
         // レーザーサイトのテクスチャで切り出す所（UV）：傷・汚れだけの無地の黒い金属の面（枠・文字・色の付いた所を避けて選んだ）
         static readonly Vector4 PartPatch = new(0.40f, 0.46f, 0.085f, 0.085f);
         static readonly string[] PatchMaps = { "_BaseMap", "_MainTex", "_BumpMap", "_MetallicGlossMap", "_SpecGlossMap", "_OcclusionMap" };
@@ -116,7 +123,7 @@ namespace FPCustom
 
         static Material Tiled(Material src, float scale, Role role)
         {
-            float uvPerUnit = scale / PatchMeters;   // メッシュの 1 単位 = 実物の scale m
+            float uvPerUnit = scale / TileMeters;   // メッシュの 1 単位 = 実物の scale m
             string key = $"{src.Pointer}_{uvPerUnit:F2}_{role}";
             if (_tiled.TryGetValue(key, out var m) && m != null) return m;
             var baseTex = src.GetTexture("_BaseMap") ?? src.GetTexture("_MainTex");
@@ -144,6 +151,40 @@ namespace FPCustom
         }
 
         // テクスチャの窓 w の所を切り出した、繰り返し用のテクスチャ（折り返し・ミップ付き）。linear：凹凸・つや・陰のマップ（色の変換をしない）
+        static readonly Dictionary<IntPtr, Color> _patchMean = new();
+
+        // ほかのアタッチメントと同じ質感・つや（ApplyPart）のまま、色合いだけ target（sRGB の平均の色）に合わせる
+        public static void ApplyPartTint(GameObject part, Transform gun, Role role, Color target)
+        {
+            ApplyPart(part, gun, role);
+            try
+            {
+                foreach (var mr in part.GetComponentsInChildren<MeshRenderer>(true))
+                {
+                    var mats = mr.sharedMaterials;
+                    for (int i = 0; i < mats.Length; i++)
+                    {
+                        var m = mats[i];
+                        if (m == null || !m.HasProperty("_BaseMap") || m.GetTexture("_BaseMap") is not Texture tex || !_patchMean.TryGetValue(tex.Pointer, out var mean)) continue;
+                        string key = $"tint_{m.Pointer}_{target}";
+                        if (!_mats.TryGetValue(key, out var tm) || tm == null)
+                        {
+                            tm = new Material(m) { name = m.name + "_tint", hideFlags = HideFlags.DontUnloadUnusedAsset };
+                            var bc = m.GetColor("_BaseColor");
+                            static float F(float t, float a) => Mathf.LinearToGammaSpace(Mathf.GammaToLinearSpace(t) / Mathf.Max(0.004f, Mathf.GammaToLinearSpace(a)));
+                            var k = new Color(F(target.r, mean.r), F(target.g, mean.g), F(target.b, mean.b));
+                            tm.SetColor("_BaseColor", new Color(bc.r * k.r, bc.g * k.g, bc.b * k.b, bc.a));
+                            _mats[key] = tm;
+                            Main.Log($"[skin] tint {m.name}: patch mean {mean} -> {target} (x{k})");
+                        }
+                        mats[i] = tm;
+                    }
+                    mr.sharedMaterials = mats;
+                }
+            }
+            catch (Exception e) { Main.Log($"[skin] tint failed on {part.name}: {e.Message}"); }
+        }
+
         static Texture2D Patch(Texture src, Vector4 w, bool linear)
         {
             if (_patches.TryGetValue((src.Pointer, PatchWin), out var t) && t != null) return t;
@@ -152,6 +193,13 @@ namespace FPCustom
             var prev = RenderTexture.active; RenderTexture.active = rt;
             t = new Texture2D(PatchPx, PatchPx, TextureFormat.RGBA32, true, linear) { name = Mount.Prefix + "patch_" + src.name };
             t.ReadPixels(new Rect(0, 0, PatchPx, PatchPx), 0, 0);
+            if (!linear)
+            {
+                // 色の平均（sRGB）。色合いを合わせる部品（ワイヤーストック）用
+                var px = t.GetPixels32(); double r = 0, g = 0, b = 0;
+                foreach (var c in px) { r += c.r; g += c.g; b += c.b; }
+                _patchMean[t.Pointer] = new Color((float)(r / px.Length / 255.0), (float)(g / px.Length / 255.0), (float)(b / px.Length / 255.0));
+            }
             t.Apply(true, true);
             RenderTexture.active = prev; RenderTexture.ReleaseTemporary(rt);
             t.wrapMode = TextureWrapMode.Mirror; t.filterMode = FilterMode.Trilinear; t.anisoLevel = 4;
@@ -162,7 +210,7 @@ namespace FPCustom
         // 木の部分（subs のサブメッシュ）に、ゲームの木の材質（AKSU の木のハンドガード）を貼る。木目は部品の前後方向
         const int WoodDonor = 11;
         const string WoodPath = "1/handguard_aks74u_izhmash_aks74u_std_wood_LOD0_0";
-        static readonly Color WoodTint = new(0.50f, 0.36f, 0.26f);   // 木の色を暗く・少し赤茶に
+        static readonly Color WoodTint = new(0.44f, 0.30f, 0.21f);   // 木の色を暗く・少し赤茶に
         const int WoodWin = 40;           // 木の窓（縮小したテクスチャの画素）。金属の窓より大きく取って木目を見せる
         public static void ApplyWood(GameObject part, Transform gun, params int[] subs)
         {

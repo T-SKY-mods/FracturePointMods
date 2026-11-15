@@ -52,7 +52,7 @@ namespace FPCustom
             return a.Cat switch
             {
                 Cat.Muzzle => MuzzleModel(id, a) is { } m && Has(m.Name) && Fits.Muzzles.ContainsKey(id),
-                Cat.Stock => StockModelFor(a.Id, id) is { } sm && Has(sm) && (sm != StockModel || Has(ClampModel)) && StockAt.ContainsKey(id),
+                Cat.Stock => StockModelFor(a.Id, id) is { } sm && Has(sm) && (Hinged(a.Id) ? Has(ClampModel) && (a.Id != "p_wood_stock" || Has(WoodIron)) : a.Id == "p_frame_stock" || Vp70Fit.ContainsKey(id) && Has(Vp70Lug) && Has($"pvp70_foot_{id:00}")) && StockAt.ContainsKey(id),
                 _ => false,
             };
         }
@@ -61,7 +61,42 @@ namespace FPCustom
         //   金具（p93_clamp。原点＝グリップの背中の下端＝かかと）：かかとを左右からはさむ。グリップの幅に合わせて X を伸縮し、背中の傾きに合わせて回す
         //   ストック（p93_stock。原点＝ヒンジの軸）：ハンドガンの長さに合わせて Z を伸縮（基準のハンドガン 0.205m でかかとから床板まで 0.30m）
         public const string StockModel = "p93_stock", ClampModel = "p93_clamp";
-        public static string StockModelFor(string att, int id) => att == "p_stock" ? StockModel : null;
+        // 追加のストック：
+        //   木製・スケルトン（tools/make_stocks2.py で作った形）：M93R と同じ金具でかかとに付ける（模型の原点＝ヒンジの軸）
+        //   VP70（無料モデルのストック。tools/make_vp70_stock.py）：ハンマーの無いハンドガンだけ。下のあごがグリップの下の端の後ろ、
+        //     上のあごがスライドの下のビーバーテイルのすぐ下に来るように、高さ（あごの間隔）をハンドガンごとに伸縮する。金具なし
+        public static string StockModelFor(string att, int id) => att switch
+        {
+            "p_stock" => StockModel,
+            "p_wood_stock" => "pwood_stock",
+            "p_frame_stock" => $"pwire_stock_{id:00}",   // ワイヤーストック（銃ごとの模型。原点＝かかと。金具なしでグリップの背中に直接付く）
+            "p_poly_stock" => $"pvp70_stock_{id:00}",
+            _ => null,
+        };
+        static bool Hinged(string att) => att != "p_poly_stock" && att != "p_frame_stock";
+        const string WoodIron = "pwood_iron";
+        // VP70 を付けられるハンドガン（ハンマーの無いもの）ごとの当て方（実物と同じく、フレームの後ろに当てる。動くスライドには触れない）。
+        //   上のあご：フレームの後ろの出っ張り（ビーバーテイル）の先に、後ろから当てる。あごの塊の上の面はビーバーテイルの上の面の高さ（スライドの下）
+        //   下のあご：グリップの下の端の後ろ。あごの先はグリップの背中に食い込む（隙間なし）
+        //   ストックは曲げない・縮めない。グリップの短い銃（G-18C・CV-1）は、あごの開きを狭めて、その分ストックの下の部分を全長にわたって無くした模型
+        //   （tools/make_vp70_stock.py --raise。下の線はまっすぐ。上の線・長さ・幅は同じ）。Raise = その量
+        //   結合部の金具は、本体をストックと同じ樹脂の質感にする（びょう・ねじ・軸だけ鋼）。
+        //   上の結合部：ラグ（pvp70_lug）。あごの先をはさみ、ビーバーテイルの先を受ける。あごの先はビーバーテイルの先の 4mm 後ろ
+        //   下の結合部：銃ごとの金具（pvp70_foot_<id>）。あごの先にかぶせた口金から、グリップの背中に沿う板と、かかとのすぐ上をはさむコの字の金具。
+        //     下のあごの先はグリップの背中の 2.2mm 後ろ（間に金具の当て板が入る）（銃ごとに先を下げた模型 tools/make_vp70_stock.py --setback）。弾倉には触れない
+        //   Tang = かかとから見たビーバーテイルの先の高さ、Rear = その前後、Scale = ストックの倍率、Setback = 模型の下のあごの先を下げた量
+        //   （custstock の実測 research/custom/stock_rear_profiles.txt から計算）
+        public static readonly Dictionary<int, (float Tang, float Rear, float Raise, float Setback)> Vp70Fit = new()
+        {
+            [9] = (0.111f, -0.0042f, 0f, 0.0023f),       // SP-320
+            [13] = (0.084f, 0.0045f, 0.027f, 0.0068f),   // G-18C Auto
+            [23] = (0.076f, 0.0012f, 0.035f, 0.0038f),   // Compact CV-1
+            [24] = (0.113f, -0.0018f, 0f, 0.0047f),      // GSH
+        };
+        static readonly Color WireColor = new(0.128f, 0.150f, 0.185f);   // ワイヤーストックの色（sRGB の平均）
+        public const float Vp70Gap = 0.090f;
+        const string Vp70Lug = "pvp70_lug";
+        const float Vp70Under = 0.007f, Vp70Sink = -0.004f, Vp70TipBack = 0.0083f;
         const float ClampWidth = 0.032f, StockLength = 0.30f, RefPistol = 0.205f;
         static readonly Vector3 Hinge = new(0f, -0.0025f, -0.0105f);   // 金具の模型の中のヒンジの軸
         const int StockRubber = 1;         // ゴムの当て板（グリップの材質を貼る）
@@ -96,14 +131,45 @@ namespace FPCustom
             var go = new GameObject(Mount.Prefix + "stock");
             go.layer = root.gameObject.layer;
             go.transform.SetParent(root, false);
-            GameObject clamp, arms;
+            GameObject clamp = null, arms;
             try
             {
-                clamp = ModelLoader.Spawn(Path.Combine(Guards.ModelDir, ClampModel), go.transform, go.layer);
+                if (Hinged(att)) clamp = ModelLoader.Spawn(Path.Combine(Guards.ModelDir, ClampModel), go.transform, go.layer);
                 arms = ModelLoader.Spawn(Path.Combine(Guards.ModelDir, model), go.transform, go.layer);
             }
             catch (Exception e) { Main.Log($"[parts] stock model failed: {e.Message}"); UnityEngine.Object.Destroy(go); return null; }
             var heel = new Vector3(0f, f.HeelY, f.HeelZ);
+            if (att == "p_frame_stock")
+            {
+                // ワイヤーストック：模型は銃ごとに背中の傾き・長さを合わせてあるので、かかとに置くだけ。質感はほかのアタッチメントと同じ
+                arms.transform.localPosition = heel;
+                // 質感・つやはほかのアタッチメントと同じ。色合いは見本の写真の青みがかった灰色の鋼
+                Skin.ApplyPartTint(arms, root, Skin.Role.Body, WireColor);
+                return go;
+            }
+            if (clamp == null)
+            {
+                // VP70：模型の絵（溝・切り替えレバー・床尾の筋）をそのまま使う。高さをあごの間隔に、長さをハンドガンの長さに合わせる
+                var fit = Vp70Fit[id];
+                const float sc = 1f;
+                var at = heel + new Vector3(0f, fit.Tang - Vp70Under - Vp70Gap * sc, fit.Rear + Vp70Sink + Vp70TipBack * sc);
+                arms.transform.localPosition = at;
+                arms.transform.localScale = new Vector3(sc, Vp70Gap * sc, sc);
+                try
+                {
+                    var stockMat = arms.GetComponent<MeshRenderer>().sharedMaterial;
+                    var lug = ModelLoader.Spawn(Path.Combine(Guards.ModelDir, Vp70Lug), go.transform, go.layer);
+                    lug.transform.localPosition = at + new Vector3(0f, Vp70Gap * sc, -Vp70TipBack * sc);
+                    lug.transform.localScale = Vector3.one * sc;
+                    Skin.ApplyTiled(lug, root, stockMat, Skin.Role.Body, 1);   // 本体はストックと同じ樹脂の質感（びょう・軸は鋼のまま）
+                    var foot = ModelLoader.Spawn(Path.Combine(Guards.ModelDir, $"pvp70_foot_{id:00}"), go.transform, go.layer);
+                    foot.transform.localPosition = at + new Vector3(0f, fit.Raise, -fit.Setback * sc);
+                    foot.transform.localScale = Vector3.one * sc;
+                    Skin.ApplyTiled(foot, root, stockMat, Skin.Role.Body, 1);
+                }
+                catch (Exception e) { Main.Log($"[parts] vp70 fittings failed: {e.Message}"); }
+                return go;
+            }
             var tilt = Quaternion.Euler(Mathf.Atan(Mathf.Clamp(f.Slope, -0.1f, 0.35f)) * Mathf.Rad2Deg, 0f, 0f);
             clamp.transform.localPosition = heel;
             clamp.transform.localRotation = tilt;
@@ -112,8 +178,23 @@ namespace FPCustom
             arms.transform.localScale = new Vector3(1f, 1f, StockLen(f) / StockLength);
             // 色・模様・つやはほかのアタッチメント（レーザーサイト）と同じ灰色の金属。銃がタンなどの色でも同じ
             Skin.ApplyPart(clamp, root, Skin.Role.Body);
-            Skin.ApplyPart(arms, root, Skin.Role.Body, StockRubber);
-            Skin.ApplyPart(arms, root, Skin.Role.Grip, 0);   // ゴムの当て板：つやを抑える
+            switch (att)
+            {
+                case "p_wood_stock":   // 木は専用の木目のまま。鉄の部品（口金・輪・ちょうつがい）は別の模型で、ほかのアタッチメントと同じ金属の質感
+                    try
+                    {
+                        var iron = ModelLoader.Spawn(Path.Combine(Guards.ModelDir, WoodIron), go.transform, go.layer);
+                        iron.transform.localPosition = arms.transform.localPosition;
+                        iron.transform.localScale = arms.transform.localScale;
+                        Skin.ApplyPart(iron, root, Skin.Role.Body);
+                    }
+                    catch (Exception e) { Main.Log($"[parts] stock iron failed: {e.Message}"); }
+                    break;
+                default:
+                    Skin.ApplyPart(arms, root, Skin.Role.Body, StockRubber);
+                    Skin.ApplyPart(arms, root, Skin.Role.Grip, 0);   // ゴムの当て板：つやを抑える
+                    break;
+            }
             return go;
         }
 

@@ -33,10 +33,12 @@ Five mods in one package. Install once, then turn each mod on or off in **Settin
 ### Weapon customization mod (FPCustom)
 - Add and remove attachments on the "CUSTOMIZE" page of the stash
   - **Rifles / SMGs / shotguns**: 20 attachments (muzzle 5, grip 5, sight 5, laser 3, magazine 2)
-  - **Handguns**: 12 attachments (muzzle 5, stock 1, sight 1, laser 3, magazine 2)
+  - **Handguns**: 15 attachments (muzzle 5, stock 4, sight 1, laser 3, magazine 2)
 - Unlock attachments with "Broken Weapon Parts" (per weapon type)
 - Each attachment has its own effect: recoil, ergonomics, reload, fire rate, damage and more
 - Slide changes: while sliding, 70% of enemy bullets miss you. Handguns slide about 5m and can aim and fire while sliding
+- Handguns with a stock are held against the shoulder when aiming, like a main weapon
+- While aiming, handgun bullets go where the sights point
 
 ### Optimization mod (FPOptimize)
 - Cuts wasted CPU work without changing visuals or controls: fewer stutters and less FPS drop with many enemies
@@ -81,10 +83,12 @@ Details: `README.txt` in the zip.
 ### 武器カスタマイズmod（FPCustom）
 - 保管庫の「カスタマイズ」ページで、武器にアタッチメントを付け外しできます
   - **ライフル・SMG・ショットガン**: 20 種類（マズル 5・グリップ 5・サイト 5・レーザー 3・マガジン 2）
-  - **ハンドガン**: 12 種類（マズル 5・ストック 1・サイト 1・レーザー 3・マガジン 2）
+  - **ハンドガン**: 15 種類（マズル 5・ストック 4・サイト 1・レーザー 3・マガジン 2）
 - 解放には「壊れた武器部品」が必要です（武器の種類ごと）
 - アタッチメントごとに効果があります（反動・エルゴ・リロード・連射速度・ダメージなど）
 - スライディングの調整: スライディング中は敵の弾を 70% の確率で受けません。ハンドガンは約 5m 滑り、滑りながらエイム射撃できます
+- ストックを付けたハンドガンは、メイン武器のようにストックを肩に当てて構えます
+- ハンドガンはエイム中、照準どおりに弾が飛びます
 
 ### 最適化mod（FPOptimize）
 - 見た目と操作を変えずに CPU の無駄な処理を減らし、カクつきと敵が多い場面の FPS 低下を軽くします

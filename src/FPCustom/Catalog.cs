@@ -68,6 +68,9 @@ namespace FPCustom
             new Att { Id = "p_linear_comp",     Cat = Cat.Muzzle,   Ja = "リニアコンペンセイター", En = "Linear compensator", Source = Source.Asset, Pistol = true },
             new Att { Id = "p_flash_hider", Cat = Cat.Muzzle,   Ja = "フラッシュハイダー",    En = "Flash hider",      Source = Source.Asset, Pistol = true },
             new Att { Id = "p_stock",       Cat = Cat.Stock,    Ja = "M93Rストック",         En = "M93R stock",       Source = Source.Asset, Pistol = true },
+            new Att { Id = "p_poly_stock",  Cat = Cat.Stock,    Ja = "VP70ストック",         En = "VP70 stock",       Source = Source.Asset, Pistol = true },   // ハンマーの無いハンドガンだけ
+            new Att { Id = "p_wood_stock",  Cat = Cat.Stock,    Ja = "ウッドストック",        En = "Wooden stock",     Source = Source.Asset, Pistol = true },
+            new Att { Id = "p_frame_stock", Cat = Cat.Stock,    Ja = "ワイヤーストック",      En = "Wire stock",   Source = Source.Asset, Pistol = true },
             new Att { Id = "p_dot",         Cat = Cat.Sight,    Ja = "RMR",                  En = "RMR",    Source = Source.Vanilla, Factory = new[] { 9 }, Pistol = true },
             new Att { Id = "p_laser",       Cat = Cat.SideRail, Ja = "レーザーサイト(赤)",    En = "Laser sight (red)",   Source = Source.Vanilla, Factory = new[] { 7, 9 }, Pistol = true },
             new Att { Id = "p_laser_blue",  Cat = Cat.SideRail, Ja = "レーザーサイト(青)",    En = "Laser sight (blue)",  Source = Source.Vanilla, Look = "p_laser", Beam = BlueBeam, Pistol = true },

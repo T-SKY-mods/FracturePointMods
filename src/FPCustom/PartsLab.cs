@@ -231,6 +231,36 @@ namespace FPCustom
         static void Check(string what, bool ok) => Main.Log($"[test] CHECK {what}: {(ok ? "PASS" : "FAIL")}");
 
         // ハンドガンのストック：グリップの下端と背中（後ろの面）を横からの撮影で測り、ストックの前の上端をグリップの背中の中ほどに当てる
+        // 見た目の確認用：左の斜め後ろ上から、少し暗めの光で撮る（ゲームの中の見え方に近い陰影。質感・継ぎ目を見る）
+        static void Beauty(GameObject go, Vector3 center, string file)
+        {
+            const int W = 1600, H = 900;
+            var root = go.transform;
+            var sheet = new Texture2D(W, H * 2, TextureFormat.RGB24, false);
+            var views = new[] { new Vector3(-0.62f, 0.10f, -0.16f), new Vector3(-0.34f, 0.20f, -0.52f) };
+            for (int v = 0; v < 2; v++)
+            {
+                var camGo = new GameObject("FPR_LabCam"); var cam = camGo.AddComponent<Camera>();
+                var k = new GameObject("FPR_LabLight"); var key = k.AddComponent<Light>(); key.type = LightType.Directional; key.intensity = 1.25f; key.color = new Color(1f, 0.97f, 0.92f);
+                var fl = new GameObject("FPR_LabLight2"); var fill = fl.AddComponent<Light>(); fill.type = LightType.Directional; fill.intensity = 0.35f; fill.color = new Color(0.8f, 0.87f, 1f);
+                camGo.transform.position = root.TransformPoint(center + views[v]);
+                camGo.transform.rotation = Quaternion.LookRotation(root.TransformPoint(center) - camGo.transform.position, root.up);
+                k.transform.rotation = Quaternion.LookRotation(root.right * 0.6f - root.up * 0.7f + root.forward * 0.35f, root.up);
+                fl.transform.rotation = Quaternion.LookRotation(-root.right * 0.3f + root.up * 0.5f - root.forward * 0.6f, root.up);
+                cam.fieldOfView = 34f; cam.nearClipPlane = 0.02f; cam.farClipPlane = 5f;
+                cam.clearFlags = CameraClearFlags.SolidColor; cam.backgroundColor = new Color(0.16f, 0.17f, 0.19f);
+                var rt = new RenderTexture(W, H, 24) { antiAliasing = 4 }; cam.targetTexture = rt; cam.aspect = (float)W / H;
+                cam.Render();
+                var prev = RenderTexture.active; RenderTexture.active = rt;
+                sheet.ReadPixels(new Rect(0, 0, W, H), 0, (1 - v) * H);
+                RenderTexture.active = prev; cam.targetTexture = null;
+                UnityEngine.Object.Destroy(rt); UnityEngine.Object.Destroy(camGo); UnityEngine.Object.Destroy(k); UnityEngine.Object.Destroy(fl);
+            }
+            sheet.Apply();
+            File.WriteAllBytes(file, ImageConversion.EncodeToPNG(sheet));
+            UnityEngine.Object.Destroy(sheet);
+        }
+
         public static void StockShot(Il2Cpp.WeaponItem wi)
         {
             var prefab = wi.Weapon?.gameObject;
@@ -264,6 +294,17 @@ namespace FPCustom
                     var row = sh.Tex.GetPixels(0, sh.PyOfY(y), SightLab.W, 1);
                     for (int px = 0; px < SightLab.W; px++) if (!SightLab.IsBg(row[px])) { rear.Add((y, sh.ZAt(px))); break; }
                 }
+                // 後ろの輪郭の全体（下端からいちばん上まで 2mm ごと）と、その写真（ストックの形を合わせるのに使う）
+                {
+                    var all = new List<string>();
+                    for (float y = bottom + 0.001f; y <= f.Axis + 0.03f; y += 0.002f)
+                    {
+                        var row = sh.Tex.GetPixels(0, sh.PyOfY(y), SightLab.W, 1);
+                        for (int px = 0; px < SightLab.W; px++) if (!SightLab.IsBg(row[px])) { all.Add($"{y:F3}:{sh.ZAt(px):F4}"); break; }
+                    }
+                    Main.Log($"[plab] REAR [{wi.Id}] {wi.GetName()} {string.Join(" ", all)}");
+                    File.WriteAllBytes(Path.Combine(ShotDir, $"parts_{wi.Id:00}_bare.png"), ImageConversion.EncodeToPNG(sh.Tex));
+                }
                 float zBack = rear.Where(r => r.y <= bottom + 0.035f).Min(r => r.z);
                 var heel = rear.First(r => r.z < zBack + 0.002f);
                 float ZAtY(float y) { var r = rear.OrderBy(q => Mathf.Abs(q.y - y)).First(); return r.z; }
@@ -291,13 +332,39 @@ namespace FPCustom
                 Main.Log($"[plab] STOCK [{wi.Id}] {wi.GetName()} bottom={bottom:F4} at z={bottomZ:F4} back=[{string.Join(" ", rows.Select(r => $"{r.y:F3}:{r.z:F4}"))}] axis={f.Axis:F4} tip={f.Tip:F4}");
                 // 装備中のストック（実際の武器から複製したとき）は外してから撮る
                 for (Transform old; (old = go.transform.Find(Mount.Prefix + "stock")) != null;) UnityEngine.Object.DestroyImmediate(old.gameObject);
-                if (!AssetParts.Has(AssetParts.StockModel) || AssetParts.AttachStock(go.transform, wi.Id) == null) return;
-                // ストックの床板まで入るように、銃口から床板までの真ん中を中心に撮る
+                // 付けられるストックを 1 つずつ付けて、床尾まで入るように撮る
                 var fit = AssetParts.StockAt[wi.Id];
                 float rearZ = fit.HeelZ - AssetParts.StockLen(fit);
-                var sh2 = SightLab.RenderSide(go, Mathf.Max(0.16f, (f.Tip - rearZ) / 4f + 0.02f), new Vector3(0f, f.Axis - 0.06f, (f.Tip + rearZ) / 2f));
-                File.WriteAllBytes(Path.Combine(ShotDir, $"parts_{wi.Id:00}_stock.png"), ImageConversion.EncodeToPNG(sh2.Tex));
-                sh2.Dispose();
+                foreach (var att in Catalog.For(wi.Id, Cat.Stock))
+                {
+                    for (Transform old; (old = go.transform.Find(Mount.Prefix + "stock")) != null;) UnityEngine.Object.DestroyImmediate(old.gameObject);
+                    if (AssetParts.AttachStock(go.transform, wi.Id, att.Id) == null) { Main.Log($"[plab] [{wi.Id}] {att.Id}: attach failed"); continue; }
+                    var sh2 = SightLab.RenderSide(go, Mathf.Max(0.16f, (f.Tip - rearZ) / 4f + 0.02f), new Vector3(0f, f.Axis - 0.05f, (f.Tip + rearZ) / 2f));
+                    File.WriteAllBytes(Path.Combine(ShotDir, $"parts_{wi.Id:00}_{att.Id}.png"), ImageConversion.EncodeToPNG(sh2.Tex));
+                    sh2.Dispose();
+                    Beauty(go, new Vector3(0f, f.Axis - 0.05f, (f.Tip + rearZ) / 2f), Path.Combine(ShotDir, $"beauty_{wi.Id:00}_{att.Id}.png"));
+                    int verts = 0;
+                    foreach (var mf in go.transform.Find(Mount.Prefix + "stock").GetComponentsInChildren<MeshFilter>(true)) verts += mf.sharedMesh?.vertexCount ?? 0;
+                    Main.Log($"[plab] [{wi.Id}] {att.Id}: attached, {verts} verts");
+                    if (att.Id != "p_stock")
+                    {
+                        // 追加のストック：軽いこと（M93R ストックは約 5000 頂点）・効果（VP70 コントロール +3、ウッド コントロール -5、ワイヤー エルゴ -5 と、それぞれの特殊効果）
+                        var st = Effects.Stats(att, wi.Id).ToList();
+                        // ワイヤーは固定の値なし（ポイントエイム・通常のエイムで変わる。説明 4 行）
+                        var want = att.Id == "p_poly_stock" ? (FPModOption.WeaponStat.Control, 3f) : (FPModOption.WeaponStat.Control, -5f);
+                        bool fx = att.Id == "p_frame_stock" ? st.Count == 0 && Effects.Notes(att, wi.Id).Count() == 4
+                            : st.Count == 1 && st[0].Stat == want.Item1 && st[0].Value == want.Item2 && Effects.Notes(att, wi.Id).Any();
+                        Main.Log($"[test] CHECK {wi.GetName()} {att.Id}: no heavier than the M93R stock ({verts} verts <= 5600): {(verts > 0 && verts <= 5600 ? "PASS" : "FAIL")}");
+                        Main.Log($"[test] CHECK {wi.GetName()} {att.Id}: effects as specified: {(fx ? "PASS" : "FAIL")}");
+                    }
+                }
+                {
+                    // 付けられるストック：VP70 はハンマーの無いハンドガン（SP-320・G-18C・CV-1・GSH）だけ。木製・スケルトン・M93R は全部
+                    var ids = Catalog.For(wi.Id, Cat.Stock).Select(a => a.Id).ToList();
+                    bool hammerless = wi.Id is 9 or 13 or 23 or 24;
+                    bool ok = ids.Contains("p_stock") && ids.Contains("p_wood_stock") && ids.Contains("p_frame_stock") && ids.Contains("p_poly_stock") == hammerless && ids.Count == (hammerless ? 4 : 3);
+                    Main.Log($"[test] CHECK {wi.GetName()}: stocks offered [{string.Join(", ", ids)}]: {(ok ? "PASS" : "FAIL")}");
+                }
             }
             catch (Exception e) { Main.Log($"[plab] [{wi.Id}] stock failed: {e}"); }
             UnityEngine.Object.Destroy(holder);

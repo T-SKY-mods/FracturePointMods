@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -57,7 +57,87 @@ namespace FPCustom
 
         static void Wait(List<(string, Action)> s, int n = 1) { for (int i = 0; i < n; i++) s.Add(("wait", () => { })); }
 
-        public static void Register() => TestMode.ExternalScenarios["custui"] = Steps;
+        public static void Register()
+        {
+            TestMode.ExternalScenarios["custui"] = Steps;
+            TestMode.ExternalScenarios["custstockui"] = StockSteps;
+        }
+
+        // 追加のストック（VP70・ウッド・スケルトン）を、カスタマイズ画面の操作だけで解放・装着できるか
+        //   G-18C（ハンマー無し）：ストックの枠に M93R・VP70・ウッド・スケルトンが並ぶ。Model 92（ハンマーあり）：VP70 は出ない
+        static List<(string, Action)> StockSteps()
+        {
+            const int glock = 13, m92 = 7, row = 1;   // ハンドガンの枠：0 = マズル、1 = ストック
+            var names = new[] { "p_poly_stock", "p_wood_stock", "p_frame_stock" };
+            int before = 0;
+            var s = new List<(string, Action)>();
+            s.Add(("setup", () => { before = Parts.Count(); Refs.Inv.AddLootItem(Parts.ItemId, Store.UnlockCost * 4, false); }));
+            s.Add(("open stash", () => Refs.Bag.Interact()));
+            Wait(s);
+            s.Add(("open customize", () => CustomUi.OpenButtonForTest?.GetComponent<UnityEngine.UI.Button>()?.onClick.Invoke()));
+            Wait(s);
+            s.Add(("select G-18C", () =>
+            {
+                Check("customize page open", CustomUi.IsOpen);
+                CustomUi.SelectForTest(glock);
+                var ids = Catalog.For(glock, Cat.Stock).Select(a => a.Id).ToList();
+                Check($"G-18C stock options [{string.Join(", ", ids)}]", ids.SequenceEqual(new[] { "p_stock", "p_poly_stock", "p_wood_stock", "p_frame_stock" }));
+            }));
+            int used = 0;
+            foreach (var id in names)
+            {
+                var att = id;
+                s.Add(($"attach {att}", () =>
+                {
+                    CustomUi.BrowseToForTest(row, att);
+                    var a = Catalog.Get(att);
+                    string shown = CustomUi.RowForTest(row);
+                    Check($"{att}: shown on the stock row ({shown})", shown.Contains(a.Name(Core.Ja)));
+                    int parts0 = Parts.Count();
+                    CustomUi.ClickActForTest(row);
+                    used += parts0 - Parts.Count();
+                    var dw = Tracker.ItemById(glock)?.Weapon;
+                    Check($"{att}: unlocked with {parts0 - Parts.Count()} parts and attached ({Store.Describe(glock)})", Store.Equipped(glock, Cat.Stock)?.Id == att && parts0 - Parts.Count() == Store.UnlockCost);
+                    var bad = CustomUi.LayoutProblemsForTest(10f);
+                    Check($"{att}: page layout ok ({bad})", string.IsNullOrEmpty(bad));
+                }));
+                Wait(s);
+                s.Add(($"shot {att}", () =>
+                {
+                    // 画面の文字は次のフレームで変わるので、ここで読む。選択中＝装着中のストックの効果
+                    var fx = CustomUi.EffectsForTest;
+                    var key = att == "p_poly_stock" ? "3点バースト" : att == "p_wood_stock" ? "しゃがみ中コントロール+15" : "ポイントエイム時コントロール+20";
+                    Check($"{att}: effects shown ({key}) and listed as equipped", fx.Contains(key) && fx.Contains(Catalog.Get(att).Name(Core.Ja)));
+                    Shot("stockui_" + att);
+                }));
+                Wait(s);
+            }
+            s.Add(("switch back and remove", () =>
+            {
+                // 解放済みの物への付け替えは部品を使わない。外すこともできる
+                int parts0 = Parts.Count();
+                CustomUi.BrowseToForTest(row, "p_wood_stock");
+                CustomUi.ClickActForTest(row);
+                Check($"switch to an unlocked stock costs nothing ({Store.Describe(glock)})", Store.Equipped(glock, Cat.Stock)?.Id == "p_wood_stock" && Parts.Count() == parts0);
+                CustomUi.ClickActForTest(row);
+                Check($"stock removed ({Store.Describe(glock)})", Store.Equipped(glock, Cat.Stock) == null);
+            }));
+            s.Add(("Model 92", () =>
+            {
+                CustomUi.SelectForTest(m92);
+                var ids = Catalog.For(m92, Cat.Stock).Select(a => a.Id).ToList();
+                Check($"Model 92 stock options [{string.Join(", ", ids)}] (no VP70: it has a hammer)", ids.SequenceEqual(new[] { "p_stock", "p_wood_stock", "p_frame_stock" }));
+                CustomUi.BrowseToForTest(row, "p_frame_stock");
+                int parts0 = Parts.Count();
+                CustomUi.ClickActForTest(row);
+                // 解放は武器ごと：Model 92 では改めて部品を使う
+                Check($"Model 92: skeleton stock unlocked with {parts0 - Parts.Count()} parts and attached ({Store.Describe(m92)})", Store.Equipped(m92, Cat.Stock)?.Id == "p_frame_stock" && parts0 - Parts.Count() == Store.UnlockCost);
+            }));
+            Wait(s);
+            s.Add(("shot Model 92", () => Shot("stockui_m92_frame")));
+            Wait(s);
+            return s;
+        }
 
         static int _rifle = 2, _pistol = 9, _partsBefore;   // AK-12（最初から部品付き）と SP-320
         static int Given => Store.UnlockCost * 2 + 5;   // 解放 2 回分 + 端数
@@ -132,11 +212,13 @@ namespace FPCustom
                 string plusCol = Col("plus", "minus"), minusCol = Col("minus", "sum"), eqHead = Col("sum", "eqplus"), eqPlus = Col("eqplus", "eqminus"), eqMinus = Col("eqminus", null);
                 string N((string Ja, string En, bool Plus) n) => Core.Ja ? n.Ja : n.En;
                 var sup = Catalog.Get("suppressor");
-                Check("effects: picked part split into pros (control +5, capacity) and cons (loading)",
-                      plusCol.Contains("+5") && plusCol.Contains(N(mag[0])) && minusCol.Contains(N(mag[1])) && !minusCol.Contains("+5"));
+                // コントロールの値は表示の単位（StatScale）に直した値（以前の +5 → 今は +2）
+                string ctl = "+" + Catalog.Get("ext_mag").Effects.First(e => e.Item1 == FPModOption.WeaponStat.Control).Item2.ToString("0");
+                Check($"effects: picked part split into pros (control {ctl}, capacity) and cons (loading)",
+                      plusCol.Contains(ctl) && plusCol.Contains(N(mag[0])) && minusCol.Contains(N(mag[1])) && !minusCol.Contains(ctl));
                 Check("effects: every equipped part listed with all its effects (suppressor + extended mag)",
                       eqHead.Contains(sup.Name(Core.Ja)) && eqHead.Contains(Catalog.Get("ext_mag").Name(Core.Ja))
-                      && eqPlus.Contains("+5") && eqPlus.Contains(N(mag[0])) && sup.Notes.Where(n => n.Plus).All(n => eqPlus.Contains(N(n)))
+                      && eqPlus.Contains(ctl) && eqPlus.Contains(N(mag[0])) && sup.Notes.Where(n => n.Plus).All(n => eqPlus.Contains(N(n)))
                       && eqMinus.Contains("-3") && eqMinus.Contains(N(mag[1])));
                 Shot("cust_2_akms");
                 Preview.Save(Path.Combine(ShotDir, "cust_2_akms_view.png"));

@@ -1,4 +1,4 @@
-﻿Fracture Point fan MOD set 1.2.0
+﻿Fracture Point fan MOD set 1.3.0
 =====================================
 
 Game : Steam build 25787540 / Mod loader: MelonLoader 0.7.3
@@ -49,14 +49,16 @@ Japanese: README_JA.txt
   [Weapon customization mod] (FPCustom)
     - Add and remove attachments on the "CUSTOMIZE" page of the stash
       Rifles / SMGs / shotguns: 20 attachments (muzzle 5, grip 5, sight 5, laser 3, magazine 2)
-      Handguns: 12 attachments (muzzle 5, stock 1, sight 1, laser 3, magazine 2)
+      Handguns: 15 attachments (muzzle 5, stock 4, sight 1, laser 3, magazine 2)
     - Unlocking needs "Broken Weapon Parts" (per weapon type)
     - Each attachment changes stats such as recoil, ergonomics and reload
     - Slide changes
         All weapons : while sliding, 70% of enemy bullets miss you
         Main weapons: no aiming while sliding (hip fire works)
         Handguns    : slide about 5m and keep running with no stiffness; aim and fire while sliding or sprinting; move speed +5%
-      An angled foregrip gives a main weapon the handgun movement; an M93R stock gives a handgun the main-weapon movement
+      An angled foregrip gives a main weapon the handgun movement; an M93R or VP70 stock gives a handgun the main-weapon movement
+    - A handgun with a stock is held against the shoulder when aiming, like a main weapon
+    - While aiming, handgun bullets go where the sights point
     - With the rarity mod ON, you can switch between the mastery page and the customize page
 
   [Optimization mod] (FPOptimize)
