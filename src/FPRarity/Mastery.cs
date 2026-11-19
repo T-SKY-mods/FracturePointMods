@@ -63,7 +63,7 @@ namespace FPRarity
 
         // ---------- レベル計算 ----------
 
-        public static bool Eligible(int weaponId) => weaponId >= 0 && weaponId != RpgId;
+        public static bool Eligible(int weaponId) => weaponId >= 0 && weaponId != RpgId && Weapons.Released(weaponId);
 
         // そのレベルに必要な累計キル数
         public static int KillsForLevel(int level)

@@ -32,6 +32,8 @@
     <Reference Include="$(GameDir)\MelonLoader\Il2CppAssemblies\Il2CppSystem.dll" />
     <Reference Include="$(GameDir)\MelonLoader\Il2CppAssemblies\Assembly-CSharp.dll" />
     <Reference Include="$(GameDir)\MelonLoader\Il2CppAssemblies\UnityEngine.PhysicsModule.dll" />
+    <Reference Include="$(GameDir)\MelonLoader\Il2CppAssemblies\UnityEngine.AudioModule.dll" />
+    <Reference Include="$(GameDir)\MelonLoader\Il2CppAssemblies\Il2CppImpactCFX.dll" />
     <Reference Include="$(GameDir)\MelonLoader\Il2CppAssemblies\UnityEngine.CoreModule.dll" />
     <Reference Include="$(GameDir)\MelonLoader\Il2CppAssemblies\Unity.TextMeshPro.dll" />
     <Reference Include="$(GameDir)\MelonLoader\Il2CppAssemblies\UnityEngine.UI.dll" />

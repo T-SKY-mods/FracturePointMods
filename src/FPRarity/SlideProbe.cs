@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -192,6 +192,363 @@ namespace FPRarity
             if (!pistol && !aim) _rifleRunSpeed = runSpeed;
         }
 
+        // ---------- ストック付きハンドガン：ダッシュ中にエイムして撃つ（2026-11-19 の報告：エイムが中途半端で止まる）----------
+        const int StockPistolId = 22;   // J-941
+        public static List<(string, Action)> StockSprintSteps()
+        {
+            var steps = new List<(string, Action)>
+            {
+                ("hold the J-941", () =>
+                {
+                    if (!Tracker.Held.Any(h => h.Roll.WeaponId == StockPistolId))
+                    {
+                        if (Tracker.Held.Count >= 3) TestMode.Call(Refs.Bag, "MoveWeaponToStash", Tracker.ItemById(Tracker.Held.First().Roll.WeaponId));
+                        TestMode.Call(Tracker.Inv, "AddWeapon", Tracker.ItemById(StockPistolId));
+                    }
+                }),
+                ("count shots", InstallShotCounter),
+                ("start endless run", () => Main.FindAll<ButtonStartEndlessMode>().FirstOrDefault()?.StartEndlessRun()),
+            };
+            // 走れる広さのある所（エンドレスの最初の階）で行う
+            for (int i = 0; i < 12; i++) steps.Add(("wait load", () => { }));
+            steps.Add(("enter elevator + move", () => EndlessProbe.EnterAndMove()));
+            for (int i = 0; i < 15; i++) steps.Add(("wait / pick card", EndlessProbe.PickCard));
+            steps.Add(("move to an open spot", MoveToOpenSpot));
+            foreach (var stock in new[] { "p_stock", "" })
+            {
+                string st = stock;
+                steps.Add(($"stock {(st == "" ? "none" : st)}", () => { SetCustom(StockPistolId, "Stock", st == "" ? null : st); Tracker.ApplyAll(); }));
+                steps.Add(("equip J-941", () => EquipId(StockPistolId)));
+                steps.Add(("wait", () => { })); steps.Add(("wait", () => { }));
+                foreach (var delay in new[] { 0.05f, 0.15f, 0.4f })
+                {
+                    float d = delay;
+                    string label = $"{(st == "" ? "no stock" : st)} fire {d:0.00}s after aim";
+                    steps.Add(($"dash, aim, fire ({label})", () => MelonCoroutines.Start(StockSprintTest(label, d))));
+                    for (int i = 0; i < 9; i++) steps.Add(("wait", () => { }));
+                }
+            }
+            return steps;
+        }
+
+        static void SetCustom(int id, string cat, string att)
+        {
+            var store = Type.GetType("FPCustom.Store, FPCustom");
+            var catT = Type.GetType("FPCustom.Cat, FPCustom");
+            var m = store?.GetMethod("SetForTest", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
+            if (m == null || catT == null) { Main.Log("[stock] FPCustom not found"); return; }
+            m.Invoke(null, new object[] { id, Enum.Parse(catT, cat), att });
+            Main.Log($"[stock] {Tracker.NameOf(id)} {cat} = {att ?? "none"}");
+        }
+
+        static void EquipId(int id)
+        {
+            var fps = Refs.Fps; var list = fps?.InstantiatedWeapons;
+            string want = Tracker.ItemById(id)?.Weapon?.gameObject.name;
+            for (int i = 0; list != null && i < list.Count; i++)
+                if (list[i] != null && list[i].gameObject.name.Replace("(Clone)", "").Trim() == want) { fps.StartWeaponChange(i); return; }
+            Main.Log($"[stock] {want} not in hands");
+        }
+
+        // ---------- ダッシュ・エイム・射撃をほぼ同時に、撃ち続ける（どの武器でも、エイムが途中で止まるという報告）----------
+        public static List<(string, Action)> SimulSteps()
+        {
+            var steps = new List<(string, Action)>
+            {
+                ("count shots", InstallShotCounter),
+                ("start endless run", () => Main.FindAll<ButtonStartEndlessMode>().FirstOrDefault()?.StartEndlessRun()),
+            };
+            for (int i = 0; i < 12; i++) steps.Add(("wait load", () => { }));
+            steps.Add(("enter elevator + move", () => EndlessProbe.EnterAndMove()));
+            for (int i = 0; i < 15; i++) steps.Add(("wait / pick card", EndlessProbe.PickCard));
+            steps.Add(("move to an open spot", MoveToOpenSpot));
+            steps.Add(("invincible", Invincible));
+            foreach (var (id, stock) in new[] { (0, ""), (13, ""), (22, ""), (22, "p_stock") })
+            {
+                int wid = id; string st = stock;
+                steps.Add(($"hold {wid}", () =>
+                {
+                    if (!Tracker.Held.Any(h => h.Roll.WeaponId == wid))
+                    {
+                        var big = Tracker.ItemById(wid).Type == WeaponItem.SlotType.Big;
+                        var same = Tracker.Held.FirstOrDefault(h => (Tracker.ItemById(h.Roll.WeaponId).Type == WeaponItem.SlotType.Big) == big);
+                        if (same != null && (big || Tracker.Held.Count >= 3)) TestMode.Call(Refs.Bag, "MoveWeaponToStash", Tracker.ItemById(same.Roll.WeaponId));
+                        TestMode.Call(Tracker.Inv, "AddWeapon", Tracker.ItemById(wid));
+                    }
+                    if (Catalog_IsPistol(wid)) SetCustom(wid, "Stock", st == "" ? null : st);
+                    Tracker.ApplyAll();
+                }));
+                steps.Add(("wait", () => { }));
+                steps.Add(($"equip {wid}", () => EquipId(wid)));
+                steps.Add(("wait", () => { })); steps.Add(("wait", () => { }));
+                string label = $"{Tracker.NameOf(wid)}{(st == "" ? "" : " + " + st)}";
+                foreach (var mode in new[] { "dash, then aim+fire", "dash, then fire+aim", "dash+aim+fire" })
+                {
+                    string md = mode;
+                    steps.Add(($"{md} ({label})", () => MelonCoroutines.Start(SimulTest($"{label} [{md}]", md))));
+                    for (int i = 0; i < 12; i++) steps.Add(("wait", () => { }));
+                }
+            }
+            return steps;
+        }
+
+        // どの仕組みが原因かを 1 回のテストで調べる：武器ごとに、仕組みを 1 つずつ止めて同じ操作をする
+        public static List<(string, Action)> SimulBisectSteps()
+        {
+            var steps = new List<(string, Action)>();
+            steps.Add(("count shots", InstallShotCounter));
+            steps.Add(("start endless run", () => Main.FindAll<ButtonStartEndlessMode>().FirstOrDefault()?.StartEndlessRun()));
+            for (int i = 0; i < 12; i++) steps.Add(("wait load", () => { }));
+            steps.Add(("enter elevator + move", () => EndlessProbe.EnterAndMove()));
+            for (int i = 0; i < 15; i++) steps.Add(("wait / pick card", EndlessProbe.PickCard));
+            steps.Add(("move to an open spot", MoveToOpenSpot));
+            steps.Add(("invincible", Invincible));
+            foreach (var wid0 in new[] { 0, 22 })
+            {
+                int wid = wid0;
+                steps.Add(($"hold {wid}", () => HoldForTest(wid, "")));
+                steps.Add(("wait", () => { }));
+                steps.Add(($"equip {wid}", () => EquipId(wid)));
+                steps.Add(("wait", () => { })); steps.Add(("wait", () => { }));
+                foreach (var cfg0 in new[] { "all on", "stance off", "pistol move off", "stance+pistol move off", "all on again" })
+                {
+                    string cfg = cfg0;
+                    steps.Add(($"set {cfg}", () => SetToggles(cfg)));
+                    steps.Add(($"{cfg} ({wid})", () => MelonCoroutines.Start(SimulTest($"{Tracker.NameOf(wid)} [{cfg}]", "dash, then aim+fire"))));
+                    for (int i = 0; i < 10; i++) steps.Add(("wait", () => { }));
+                }
+                steps.Add(("restore toggles", () => SetToggles("all on")));
+            }
+            return steps;
+        }
+
+        static void Invincible()
+        {
+            var player = UnityEngine.Object.FindObjectsOfType<Il2CppBallistics.LivingEntity>().FirstOrDefault(e => e.PlayerHealthManager != null);
+            if (player != null) player.PlayerHealthManager.invincible = true;
+            Main.Log($"[simul] invincible={player != null}");
+        }
+
+        static void HoldForTest(int wid, string stock)
+        {
+            if (!Tracker.Held.Any(h => h.Roll.WeaponId == wid))
+            {
+                var big = Tracker.ItemById(wid).Type == WeaponItem.SlotType.Big;
+                var same = Tracker.Held.FirstOrDefault(h => (Tracker.ItemById(h.Roll.WeaponId).Type == WeaponItem.SlotType.Big) == big);
+                if (same != null && (big || Tracker.Held.Count >= 3)) TestMode.Call(Refs.Bag, "MoveWeaponToStash", Tracker.ItemById(same.Roll.WeaponId));
+                TestMode.Call(Tracker.Inv, "AddWeapon", Tracker.ItemById(wid));
+            }
+            if (Catalog_IsPistol(wid)) SetCustom(wid, "Stock", stock == "" ? null : stock);
+            Tracker.ApplyAll();
+        }
+
+        static void SetToggles(string cfg)
+        {
+            bool stanceOff = cfg.Contains("stance"), pistolOff = cfg.Contains("pistol");
+            try { Type.GetType("FPCustom.Stance, FPCustom")?.GetField("Mode")?.SetValue(null, stanceOff ? 0 : 3); } catch (Exception e) { Main.Log("[simul] stance toggle " + e.Message); }
+            try { typeof(Slide).GetProperty("PistolOn")?.GetSetMethod(true)?.Invoke(null, new object[] { !pistolOff }); } catch (Exception e) { Main.Log("[simul] pistol toggle " + e.Message); }
+            Main.Log($"[simul] toggles: {cfg} (stance mode {(stanceOff ? 0 : 3)}, pistol move {!pistolOff})");
+        }
+
+        // ---------- 壁に向かってダッシュ中にエイム・射撃 → 壁から離れたとき、エイムが元に戻るか（実際のプレイの報告）----------
+        //   まとめて 1 回で：co-op の部品の重さの比べ（PerfCoop）→ Mod オンで壁のテスト → すべての Mod を止めて（co-op に入ったときと同じ）もう一度
+        public static List<(string, Action)> WallSteps()
+        {
+            var steps = new List<(string, Action)>
+            {
+                ("count shots", InstallShotCounter),
+                ("start endless run", () => Main.FindAll<ButtonStartEndlessMode>().FirstOrDefault()?.StartEndlessRun()),
+            };
+            for (int i = 0; i < 12; i++) steps.Add(("wait load", () => { }));
+            steps.Add(("enter elevator + move", () => EndlessProbe.EnterAndMove()));
+            for (int i = 0; i < 15; i++) steps.Add(("wait / pick card", EndlessProbe.PickCard));
+            steps.Add(("invincible", Invincible));
+            steps.Add(("co-op parts fps", () => PerfCoop.Start()));
+            for (int i = 0; i < 40; i++) steps.Add(("wait", () => { if (PerfCoop.Done) TestMode.SkipWaitsForTest(); }));
+            steps.Add(("move to an open spot", MoveToOpenSpot));
+            foreach (var modsOn in new[] { true, false })
+            {
+                bool on = modsOn;
+                if (!on) steps.Add(("all mods off (same as entering co-op)", () => { CoopGuard.EnterForTest(); Main.Log("[wall] all mods off now"); }));
+                foreach (var wid0 in new[] { 0, 22 })
+                {
+                    int wid = wid0;
+                    steps.Add(($"hold {wid}", () => { if (on) HoldForTest(wid, ""); else HoldPlain(wid); }));
+                    steps.Add(("wait", () => { }));
+                    steps.Add(($"equip {wid}", () => EquipId(wid)));
+                    steps.Add(("wait", () => { })); steps.Add(("wait", () => { }));
+                    string label = $"{Tracker.NameOf(wid)} [mods {(on ? "on" : "off")}]";
+                    steps.Add(($"wall test {label}", () => MelonCoroutines.Start(WallTest($"{Tracker.NameOf(wid)} [mods {(on ? "on" : "off")}]"))));
+                    for (int i = 0; i < 10; i++) steps.Add(("wait", () => { }));
+                }
+            }
+            return steps;
+        }
+
+        static void HoldPlain(int wid)
+        {
+            if (Tracker.Held.Any(h => h.Roll.WeaponId == wid)) return;
+            Main.Log($"[wall] {wid} not held (mods off: not adding)");
+        }
+
+        static IEnumerator WallTest(string label)
+        {
+            var fps = Refs.Fps; var mv = fps?._movementComponent;
+            if (mv == null) { Check($"{label}: player found", false); yield break; }
+            for (int w = 0; w < 50 && !GameIsForeground(); w++) { if (w % 10 == 0) BringToFront(); yield return new WaitForSeconds(0.2f); }
+            if (!GameIsForeground()) { Check($"{label}: game window in the foreground", false); yield break; }
+            // 基準：開けた所で止まってエイム
+            FillMag();
+            Teleport(fps, _spot); fps.transform.rotation = Quaternion.LookRotation(_dir);
+            yield return new WaitForSeconds(0.5f);
+            Mouse(RightDown); yield return null; if (fps.toggleAim) Mouse(RightUp);
+            yield return new WaitForSeconds(1.2f);
+            var still = CamInWeapon(fps);
+            if (fps.toggleAim) { Mouse(RightDown); yield return null; } Mouse(RightUp);
+            yield return new WaitForSeconds(0.8f);
+            // 壁の 4m 手前から、壁に向かってダッシュ → エイム → 撃ち続ける（壁に当たる）
+            var wall = _spot + _dir * Mathf.Max(0f, _free - 4f);
+            Teleport(fps, wall); fps.transform.rotation = Quaternion.LookRotation(_dir);
+            yield return new WaitForSeconds(0.4f);
+            int shots0 = _shots;
+            Key(VK_W, true); Key(VK_LSHIFT, true);
+            yield return new WaitForSeconds(0.5f);
+            bool dashing = mv.MovementState == FPSMovementState.Sprinting;
+            Mouse(RightDown); yield return null; if (fps.toggleAim) Mouse(RightUp);
+            Mouse(LeftDown);
+            bool semi = Refs.Fps.GetActiveItem()?.TryCast<Il2CppDemo.Scripts.Runtime.Item.Weapon>() is { } aw && !aw.supportsAuto;
+            for (float t = 0; t < 1.8f; t += Time.deltaTime)
+            {
+                if (semi) { if (((int)(t / 0.12f)) % 2 == 1) Mouse(LeftUp); else Mouse(LeftDown); }
+                yield return null;
+            }
+            float atWall = (CamInWeapon(fps) - still).magnitude;
+            float distToWall = Vector3.Distance(fps.transform.position, wall) ;
+            ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(Main.Dir, "shots", $"wall_{System.Text.RegularExpressions.Regex.Replace(label, "[^A-Za-z0-9]+", "_")}_atwall.png"));
+            var stateAtWall = $"move={mv.MovementState} aim={fps._aimState}";
+            Mouse(LeftUp); Key(VK_LSHIFT, false); Key(VK_W, false); mv.SetSprintRequested(false);
+            yield return new WaitForSeconds(0.3f);
+            // 壁から離れて（開けた所へ戻って）エイムしたまま待つ
+            Teleport(fps, _spot); fps.transform.rotation = Quaternion.LookRotation(_dir);
+            float maxAway = 0f;
+            for (float t = 0; t < 1.5f; t += Time.deltaTime) { if (t > 0.8f) maxAway = Mathf.Max(maxAway, (CamInWeapon(fps) - still).magnitude); yield return null; }
+            ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(Main.Dir, "shots", $"wall_{System.Text.RegularExpressions.Regex.Replace(label, "[^A-Za-z0-9]+", "_")}_away.png"));
+            Main.Log($"[wall] {label}: dashing={dashing} shots={_shots - shots0} moved {distToWall:0.0}m | at the wall {stateAtWall} off={atWall:F3} | away from the wall aim={fps._aimState} off max={maxAway:F3}");
+            Check($"{label}: aim back to the sight after leaving the wall (off {maxAway:F3}m, at the wall {atWall:F3}m)", IsAiming(fps) && maxAway < 0.01f);
+            if (fps.toggleAim && IsAiming(fps)) { Mouse(RightDown); yield return null; } Mouse(RightUp);
+            yield return new WaitForSeconds(0.5f);
+        }
+
+        static bool Catalog_IsPistol(int id) => Tracker.ItemById(id)?.Type == WeaponItem.SlotType.Small;
+
+        static IEnumerator SimulTest(string label, string mode)
+        {
+            var fps = Refs.Fps; var mv = fps?._movementComponent;
+            if (mv == null) { Check($"{label}: player found", false); yield break; }
+            for (int w = 0; w < 50 && !GameIsForeground(); w++) { if (w % 10 == 0) BringToFront(); yield return new WaitForSeconds(0.2f); }
+            if (!GameIsForeground()) { Check($"{label}: game window in the foreground", false); yield break; }
+            // 1) 止まってエイムして撃ち続けたときのずれ（基準）
+            FillMag();
+            Teleport(fps, _spot); fps.transform.rotation = Quaternion.LookRotation(_dir);
+            yield return new WaitForSeconds(0.5f);
+            Mouse(RightDown); yield return null; if (fps.toggleAim) Mouse(RightUp);
+            yield return new WaitForSeconds(1.2f);
+            var still = CamInWeapon(fps);
+            Mouse(LeftDown);
+            float baseMax = 0f;
+            for (float t = 0; t < 1.0f; t += Time.deltaTime) { if (t > 0.4f) baseMax = Mathf.Max(baseMax, (CamInWeapon(fps) - still).magnitude); yield return null; }
+            Mouse(LeftUp);
+            if (fps.toggleAim) { Mouse(RightDown); yield return null; } Mouse(RightUp);
+            yield return new WaitForSeconds(1.0f);
+            // 2) 止まった所から、走る・エイム・撃つをほぼ同時に（1 フレームずつ）押して、押し続ける
+            FillMag();
+            Teleport(fps, _spot); fps.transform.rotation = Quaternion.LookRotation(_dir);
+            yield return new WaitForSeconds(0.4f);
+            int shots0 = _shots;
+            Key(VK_W, true); Key(VK_LSHIFT, true); yield return null;
+            if (mode != "dash+aim+fire") yield return new WaitForSeconds(0.7f);   // 走っている最中に
+            bool dashing = mv.MovementState == FPSMovementState.Sprinting;
+            if (mode == "dash, then fire+aim") { Mouse(LeftDown); yield return null; }
+            Mouse(RightDown); yield return null; if (fps.toggleAim) Mouse(RightUp);
+            if (mode != "dash, then fire+aim") Mouse(LeftDown);
+            bool pistolSemi = Refs.Fps.GetActiveItem()?.TryCast<Il2CppDemo.Scripts.Runtime.Item.Weapon>() is { } aw && !aw.supportsAuto;
+            float maxOff = 0f, sum = 0f; int n = 0;
+            for (float t = 0; t < 1.6f; t += Time.deltaTime)
+            {
+                if (pistolSemi && ((int)(t / 0.12f)) % 2 == 1) Mouse(LeftUp); else if (pistolSemi) Mouse(LeftDown);   // 単発の銃は連打
+                if (t > 0.7f) { float o = (CamInWeapon(fps) - still).magnitude; maxOff = Mathf.Max(maxOff, o); sum += o; n++; }
+                if (t > 1.2f && t - Time.deltaTime <= 1.2f) ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(Main.Dir, "shots", $"simul_{System.Text.RegularExpressions.Regex.Replace(label, "[^A-Za-z0-9]+", "_")}.png"));
+                yield return null;
+            }
+            float avg = n > 0 ? sum / n : -1f;
+            var stateDuring = $"move={mv.MovementState} aim={fps._aimState} action={fps._actionState}";
+            Mouse(LeftUp);
+            Key(VK_LSHIFT, false); Key(VK_W, false); mv.SetSprintRequested(false);
+            yield return new WaitForSeconds(1.0f);
+            float after = (CamInWeapon(fps) - still).magnitude;
+            Main.Log($"[simul] {label}: dashing at aim={dashing} shots={_shots - shots0} during {stateDuring} off avg={avg:F3} max={maxOff:F3} (standing fire max {baseMax:F3}) | 1s after release off={after:F3} aim={fps._aimState}");
+            Check($"{label}: aim reaches the sight while dashing+aiming+firing (avg off {avg:F3}m, standing {baseMax:F3}m)", avg >= 0f && avg < baseMax + 0.02f);
+            if (fps.toggleAim && (int)fps._aimState >= 2) { Mouse(RightDown); yield return null; } Mouse(RightUp);
+            yield return new WaitForSeconds(0.5f);
+        }
+
+        // 構えたときのカメラの位置（武器から見た位置）。止まってエイムしたときと比べて、エイムが最後まで行ったかを見る
+        static Vector3 CamInWeapon(Il2CppDemo.Scripts.Runtime.Character.FPSController fps)
+        {
+            var w = fps.GetActiveItem(); var cam = Camera.main;
+            return w == null || cam == null ? Vector3.zero : w.transform.InverseTransformPoint(cam.transform.position);
+        }
+
+        static IEnumerator StockSprintTest(string label, float fireDelay)
+        {
+            var fps = Refs.Fps; var mv = fps?._movementComponent;
+            if (mv == null) { Check($"{label}: player found", false); yield break; }
+            for (int w = 0; w < 50 && !GameIsForeground(); w++) { if (w % 10 == 0) BringToFront(); yield return new WaitForSeconds(0.2f); }
+            if (!GameIsForeground()) { Check($"{label}: game window in the foreground", false); yield break; }
+            FillMag();
+            // 1) 止まってエイムしたときの位置（基準）
+            Teleport(fps, _spot); fps.transform.rotation = Quaternion.LookRotation(_dir);
+            yield return new WaitForSeconds(0.5f);
+            Mouse(RightDown); yield return null; if (fps.toggleAim) Mouse(RightUp);
+            yield return new WaitForSeconds(1.2f);
+            var still = CamInWeapon(fps);
+            for (int i = 0; i < 3; i++) { Mouse(LeftDown); yield return new WaitForSeconds(0.08f); Mouse(LeftUp); yield return new WaitForSeconds(i < 2 ? 0.2f : 0.05f); }
+            float stillShot = (CamInWeapon(fps) - still).magnitude;   // 止まって撃ったときの、撃った直後のずれ（反動の分）
+            Main.Log($"[stock] {label}: still aim {fps._aimState} cam={still:F3} offRightAfterShots={stillShot:F3}");
+            yield return new WaitForSeconds(1.2f);
+            if (fps.toggleAim) { Mouse(RightDown); yield return null; } Mouse(RightUp);
+            yield return new WaitForSeconds(0.8f);
+            // 2) ダッシュ → エイム → 撃つ
+            Teleport(fps, _spot); fps.transform.rotation = Quaternion.LookRotation(_dir);
+            yield return new WaitForSeconds(0.3f);
+            Key(VK_W, true); Key(VK_LSHIFT, true);
+            yield return new WaitForSeconds(0.8f);
+            bool sprinting = mv.MovementState == FPSMovementState.Sprinting;
+            Mouse(RightDown); yield return null; if (fps.toggleAim) Mouse(RightUp);
+            yield return new WaitForSeconds(fireDelay);
+            int shots0 = _shots;
+            float maxOff = 0f;
+            for (int i = 0; i < 3; i++) { Mouse(LeftDown); yield return new WaitForSeconds(0.08f); Mouse(LeftUp); yield return new WaitForSeconds(i < 2 ? 0.2f : 0.05f); }
+            float dashShot = (CamInWeapon(fps) - still).magnitude;   // 撃った直後のずれ
+            ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(Main.Dir, "shots", $"stock_sprint_shot_{label.Replace(' ', '_').Replace('.', '_')}.png"));
+            for (float t = 0; t < 1.0f; t += Time.deltaTime) { maxOff = Mathf.Max(maxOff, (CamInWeapon(fps) - still).magnitude); yield return null; }
+            Main.Log($"[stock] {label}: right after the shots off={dashShot:F3} (standing still {stillShot:F3}), max in the next 1s {maxOff:F3}");
+            Check($"{label}: aim not stuck while firing (off {dashShot:F3}m vs {stillShot:F3}m standing)", dashShot < stillShot + 0.02f);
+            var during = CamInWeapon(fps);
+            float sprintAnim = mv._animator != null ? mv._animator.GetFloat(Il2CppDemo.Scripts.Runtime.Character.FPSMovement.Sprinting) : -1f;
+            ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(Main.Dir, "shots", $"stock_sprint_{label.Replace(' ', '_').Replace('.', '_')}.png"));
+            Main.Log($"[stock] {label}: sprinting before aim={sprinting} shots={_shots - shots0} after: state={mv.MovementState} aim={fps._aimState} cam={during:F3} off={(during - still).magnitude:F3} sprintAnim={sprintAnim:0.00} toggleAim={fps.toggleAim}");
+            Check($"{label}: aimed fully after dash+aim+fire (off {(during - still).magnitude:F3}m, aim {fps._aimState})", IsAiming(fps) && (during - still).magnitude < 0.01f);
+            // 3) 止まってもエイムが戻るか
+            Key(VK_LSHIFT, false); Key(VK_W, false); mv.SetSprintRequested(false);
+            yield return new WaitForSeconds(1.2f);
+            var after = CamInWeapon(fps);
+            Main.Log($"[stock] {label}: stopped: state={mv.MovementState} aim={fps._aimState} off={(after - still).magnitude:F3}");
+            Check($"{label}: aimed fully after stopping (off {(after - still).magnitude:F3}m)", IsAiming(fps) && (after - still).magnitude < 0.01f);
+            if (fps.toggleAim) { Mouse(RightDown); yield return null; } Mouse(RightUp);
+            yield return new WaitForSeconds(0.5f);
+        }
+
         static float _rifleRunSpeed;
         static bool _aimAfter;
         static void Check(string what, bool ok) => Main.Log($"[test] CHECK {what}: {(ok ? "PASS" : "FAIL")}");
@@ -382,6 +739,7 @@ namespace FPRarity
         const int RifleId = 0, PistolId = 1;   // AK-74 / SP-229
         static int _shots;
         static Vector3 _spot, _dir = Vector3.forward;
+        static float _free;
 
         static void GiveLoadout()
         {
@@ -443,6 +801,7 @@ namespace FPRarity
             }
             _spot = bestPos;
             _dir = bestDir;
+            _free = best;
             Teleport(fps, bestPos);
             Main.Log($"[slide] open spot {bestPos:F1}: free run {best:0.0}m towards {_dir:F2}");
             Check($"test floor has a straight open run of 9m or more ({best:0.0}m)", best >= 9f);

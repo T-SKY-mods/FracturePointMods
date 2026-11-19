@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -17,7 +17,7 @@ namespace FPOptimize
     // 画質・操作・表示内容は変えない。差し替えに失敗した機能や、未検証のゲームバージョンでは何もしない（バニラのまま）。
     public class Main : MelonMod
     {
-        public const string TestedBuildGuid = "4f260e57b1bf43b3b51f9793578eb875";
+        public const string TestedBuildGuid = "740d6f15fb6a4ab6bf5969a2bbea6ab8";
         public static string Dir;
         static StreamWriter _log;
 
@@ -26,6 +26,7 @@ namespace FPOptimize
         // 検証モード：UserData/FPOptimize/verify.txt があると、元の処理と結果が一致するかを定期的に調べてログに出す
         public static bool Verify;
         public static string DisableList = "";
+        public static string BuildGuid = "?";
 
         public override void OnInitializeMelon()
         {
@@ -45,6 +46,7 @@ namespace FPOptimize
                 if (!FPModOption.Settings.Enabled("FPOptimize")) { Log("[init] turned off in the MOD tab: all features OFF (vanilla)"); Enabled = false; return; }
 
                 var guid = ReadBuildGuid();
+                BuildGuid = guid;
                 if (File.Exists(Path.Combine(Dir, "simulate_update.txt"))) { guid = "simulated-update"; Log("[test] simulating a game update"); }
                 Log($"[version] game build-guid={guid} tested={TestedBuildGuid}");
                 // ゲームの処理を同じ結果になるよう置き換えているため、中身が変わった可能性のあるバージョンでは動かさない
@@ -57,6 +59,8 @@ namespace FPOptimize
                 if (!off.Contains("loc")) LocScan.Install(HarmonyInstance);
                 if (!off.Contains("ai")) AiSight.Install(HarmonyInstance);
                 if (!off.Contains("player")) PlayerCache.Install(HarmonyInstance);
+                if (!off.Contains("impact")) ImpactSound.Install(HarmonyInstance);
+                if (!off.Contains("cooptick")) CoopTick.Install(HarmonyInstance);
                 Log("[init] done");
             }
             catch (Exception e) { Enabled = false; Log("[init] exception, all features OFF: " + e); }
@@ -75,15 +79,22 @@ namespace FPOptimize
         public override void OnSceneWasLoaded(int buildIndex, string sceneName)
         {
             Log($"SCENE {buildIndex} {sceneName}");
+            if (FPModOption.CoopGuard.Off) return;   // co-op では何もしない
             LocScan.OnSceneLoaded();
             PlayerCache.OnSceneLoaded();
+            Log("[impact] " + ImpactSound.Stats());
+            Log("[cooptick] " + CoopTick.Stats());
+            ImpactSound.OnSceneLoaded();
         }
 
         public override void OnUpdate()
         {
+            if (FPModOption.CoopGuard.Off) return;
             LocScan.Update();
             if (Verify) { LocScan.VerifyTick(); AiSight.VerifyTick(); }
         }
+
+        public override void OnApplicationQuit() => Log("[impact] " + ImpactSound.Stats());
 
         public static void Log(string msg)
         {
@@ -95,7 +106,7 @@ namespace FPOptimize
     public static class SafePatcher
     {
         static Dictionary<IntPtr, int> _ptrCount;
-        static readonly string[] Assemblies = { "Assembly-CSharp", "Il2CppFPLeaderboard.Client", "Unity.TextMeshPro", "UnityEngine.UI", "UnityEngine.CoreModule" };
+        static readonly string[] Assemblies = { "Assembly-CSharp", "Il2CppFPLeaderboard.Client", "UnityEngine.AudioModule", "Il2CppImpactCFX", "Unity.TextMeshPro", "UnityEngine.UI", "UnityEngine.CoreModule" };
 
         static void BuildIndex()
         {
@@ -146,7 +157,8 @@ namespace FPOptimize
                 return false;
             }
 
-            HarmonyMethod Hm(string n) => n == null ? null : new HarmonyMethod(AccessTools.Method(patchClass, n));
+            // co-op の間は中身を呼ばない（FPModOption.CoopGuard）
+            HarmonyMethod Hm(string n) => n == null ? null : new HarmonyMethod(FPModOption.CoopGuard.Wrap(AccessTools.Method(patchClass, n)));
             try
             {
                 h.Patch(m, Hm(prefix), Hm(postfix));

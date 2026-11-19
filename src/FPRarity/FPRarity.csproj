@@ -31,6 +31,7 @@
     <Reference Include="$(GameDir)\MelonLoader\Il2CppAssemblies\Il2Cppmscorlib.dll" />
     <Reference Include="$(GameDir)\MelonLoader\Il2CppAssemblies\Il2CppSystem.dll" />
     <Reference Include="$(GameDir)\MelonLoader\Il2CppAssemblies\Assembly-CSharp.dll" />
+    <Reference Include="$(GameDir)\MelonLoader\Il2CppAssemblies\Assembly-CSharp-firstpass.dll" />
     <Reference Include="$(GameDir)\MelonLoader\Il2CppAssemblies\Il2CppFPLeaderboard.Client.dll" />
     <Reference Include="$(GameDir)\MelonLoader\Il2CppAssemblies\Il2CppDungeonArchitect.Core.dll" />
     <Reference Include="$(GameDir)\MelonLoader\Il2CppAssemblies\UnityEngine.PhysicsModule.dll" />

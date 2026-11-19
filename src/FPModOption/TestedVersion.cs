@@ -4,8 +4,8 @@ namespace FPModOption
     public static class TestedVersion
     {
         // 自動テストで動作確認済みのゲームビルド
-        public const string BuildGuid = "4f260e57b1bf43b3b51f9793578eb875";
-        public const string SteamBuildId = "25787540";
-        public const string VerifiedAt = "2026-10-15";
+        public const string BuildGuid = "740d6f15fb6a4ab6bf5969a2bbea6ab8";
+        public const string SteamBuildId = "26773098";
+        public const string VerifiedAt = "2026-11-19";
     }
 }

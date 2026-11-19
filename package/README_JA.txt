@@ -1,7 +1,8 @@
-﻿Fracture Point ファン MOD セット 1.3.0
+﻿Fracture Point ファン MOD セット 1.4.0
 ==========================================
 
-対応ゲーム : Steam ビルド 25787540 ／ MOD ローダー: MelonLoader 0.7.3
+対応ゲーム : Steam ビルド 26773098（アップデート21・co-op）／ MOD ローダー: MelonLoader 0.7.3
+co-op      : co-op では MOD は自動で止まります（ソロで使うにはゲームを再起動）
 英語版     : README.txt
 
   Install.bat                         すべての MOD をまとめて入れる

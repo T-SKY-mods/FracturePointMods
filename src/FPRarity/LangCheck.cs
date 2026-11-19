@@ -28,6 +28,8 @@ namespace FPRarity
             var steps = new List<(string, Action)>
             {
                 ("remember language", (Action)(() => { _original = LocManager.Code; Main.Log($"[lang] game language = {_original}"); })),
+                ("main weapon for the test", (Action)TestKit.EnsureMainWeapon),
+                ("wait", (Action)(() => { })),
             };
             foreach (var code in new[] { "ja", "en" })
             {

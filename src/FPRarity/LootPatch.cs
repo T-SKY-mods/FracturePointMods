@@ -20,7 +20,7 @@ namespace FPRarity
             try
             {
                 var m = HarmonyLib.AccessTools.Method(typeof(SpawnableLoot), nameof(SpawnableLoot.GetLoot));
-                h.Patch(m, postfix: new HarmonyLib.HarmonyMethod(typeof(LootPatch), nameof(Post)));
+                h.Patch(m, postfix: FPModOption.CoopGuard.Hm(typeof(LootPatch), nameof(Post)));
                 Main.Log("[loot] weapon drops: every weapon equally likely");
                 return true;
             }

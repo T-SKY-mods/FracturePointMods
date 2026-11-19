@@ -61,7 +61,7 @@ namespace FPRarity
         // 14: VAL のダメージの上乗せを 1.3 倍から 1.15 倍に下げる（短い撃ち合いで他の武器を引き離しすぎた）
         // 15: G-18C のコントロールの上乗せを +25 から +10 に下げ、ダメージを 1.25 倍から 1.3 倍に上げる
         public const int BalanceVersion = 15;
-        const int RpgId = 26;              // ロケットランチャーは補正対象外
+        public const int RpgId = 26;       // ロケットランチャーは補正対象外
         const int ValId = 14;
         const float ValDamageBonus = 1.15f; const float ValDamageBonusV13 = 1.3f; // VAL は 20 発をすぐ撃ち切るので、コントロールの上乗せに加えてダメージも上げる
 
@@ -267,7 +267,8 @@ namespace FPRarity
             var dw = wi.Weapon;
             rpm = IsHandgun(wi) ? 1f : Math.Clamp(MathF.Pow(k, 0.05f), 0.95f, 1.05f);
             float effGain = EffectiveRpm(dw, dw.fireRate * rpm) / EffectiveRpm(dw, dw.fireRate);
-            return Math.Min(k / effGain, MaxShotDamage / bw.MuzzleDamage);
+            // 上限はバニラの最高（250）。元から 250 を超える新しい武器（今後の武器アップデート）は、元のダメージより下げない
+            return Math.Min(k / effGain, Math.Max(MaxShotDamage, bw.MuzzleDamage) / bw.MuzzleDamage);
         }
 
         // a〜b の乱数を返す関数（抽選用）。平均の個体を求めるときは、常に真ん中を返す関数を使う

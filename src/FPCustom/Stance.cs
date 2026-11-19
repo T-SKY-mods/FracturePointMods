@@ -40,6 +40,10 @@ namespace FPCustom
         static Vector3 _butt;
         public static float RotKeep = 0.45f;    // 動作で銃が傾く量のうち残す割合
         const float SettleTime = 1.0f;
+        const float FireSettleTime = 0.3f;   // 撃っただけのとき（反動）は短く
+        const float SettledFor = 0.15f;      // 構えが止まってからこの時間たてば、撃ったときに床尾を留める
+        static float _lastMoving = -10f;
+        static bool _holdForFire;
         static bool _hasButt, _inAction, _hold;
         static float _holdUntil;
         static Quaternion _refRot;
@@ -49,10 +53,10 @@ namespace FPCustom
         {
             try
             {
-                h.Patch(AccessTools.Method(typeof(IkState), "OnEvaluatePose"), new HarmonyMethod(typeof(Stance), nameof(Ik_Pre)));
-                h.Patch(AccessTools.Method(typeof(DemoWeapon), "OnEquip"), new HarmonyMethod(typeof(Stance), nameof(Equip_Pre)));
-                h.Patch(AccessTools.Method(typeof(AdsState), "OnGameThreadUpdate"), new HarmonyMethod(typeof(Stance), nameof(Ads_Pre)));
-                h.Patch(AccessTools.Method(typeof(Il2Cpp.FPSFireManager), "Fire"), new HarmonyMethod(typeof(Stance), nameof(Fire_Pre)), new HarmonyMethod(typeof(Stance), nameof(Fire_Post)));
+                h.Patch(AccessTools.Method(typeof(IkState), "OnEvaluatePose"), FPModOption.CoopGuard.Hm(typeof(Stance), nameof(Ik_Pre)));
+                h.Patch(AccessTools.Method(typeof(DemoWeapon), "OnEquip"), FPModOption.CoopGuard.Hm(typeof(Stance), nameof(Equip_Pre)));
+                h.Patch(AccessTools.Method(typeof(AdsState), "OnGameThreadUpdate"), FPModOption.CoopGuard.Hm(typeof(Stance), nameof(Ads_Pre)));
+                h.Patch(AccessTools.Method(typeof(Il2Cpp.FPSFireManager), "Fire"), FPModOption.CoopGuard.Hm(typeof(Stance), nameof(Fire_Pre)), FPModOption.CoopGuard.Hm(typeof(Stance), nameof(Fire_Post)));
                 Patched = true;
             }
             catch (Exception e) { Main.Log("[stance] patch failed: " + e.Message); }
@@ -106,8 +110,17 @@ namespace FPCustom
                 _aimAll = Mathf.MoveTowards(_aimAll, fps._aimState == AimState.Aiming && fps._actionState != ActionState.WeaponChange ? 1f : 0f, AimPullSpeed * Time.deltaTime);
                 // 撃っている間も動作と同じに扱う：ハンドガンの反動は銃を手首のまわりで大きく回す（床尾が跳ね上がって画面に入る）。
                 //   床尾を肩に留め、回る量を抑える（肩を支点にした反動に見える）
-                bool firing = FireAnchor && Time.time - _lastFire < FireHold;
-                bool act = stocked && (fps._actionState == ActionState.PlayingAnimation || firing);
+                // 構えが動いている途中（エイムの出し入れ・走りの構えから戻る途中）は、撃っても床尾を留めない。
+                //   留めると、その途中の位置に銃が止まったまま（撃ち続ける間と、その後しばらく）になる（ダッシュ中にエイムしてすぐ撃ったとき）
+                var mv = fps._movementComponent;
+                float sprintAnim = 0f;
+                try { if (mv?._animator != null) sprintAnim = mv._animator.GetFloat(Il2CppDemo.Scripts.Runtime.Character.FPSMovement.Sprinting); } catch { }
+                if ((_aimW > 0.001f && _aimW < 0.999f) || sprintAnim > 0.02f || (mv != null && mv.MovementState == MoveState.Sprinting)) _lastMoving = Time.time;
+                bool settled = Time.time - _lastMoving > SettledFor;
+                bool playing = fps._actionState == ActionState.PlayingAnimation;
+                bool firing = FireAnchor && settled && Time.time - _lastFire < FireHold;
+                if (!playing && !settled && _hold && _holdForFire) { _hold = false; }   // 撃って留めていた途中で構えが動き出したら、すぐ放す
+                bool act = stocked && (playing || firing);
                 Shoulder(stocked ? dw : null);
                 if (!stocked)
                 {
@@ -129,8 +142,9 @@ namespace FPCustom
                 var inBone = _weaponBone.InverseTransformPoint(dw.transform.TransformPoint(_butt));   // 銃の骨から見た床尾
                 var now = head.InverseTransformPoint(_weaponBone.TransformPoint(inBone));
                 var nowRot = Quaternion.Inverse(head.rotation) * _weaponBone.rotation;
-                if (act && !_inAction && !_hold) { _ref = now; _refRot = nowRot; }
-                if (act) { _hold = true; _holdUntil = Time.time + SettleTime; }
+                if (act && !_inAction && !_hold) { _ref = now; _refRot = nowRot; _holdForFire = !playing; }
+                if (playing) _holdForFire = false;
+                if (act) { _hold = true; _holdUntil = Time.time + (_holdForFire ? FireSettleTime : SettleTime); }
                 _inAction = act;
                 // 動作の終わりの合図の後も、アニメーションの残りで銃が動く。元の位置に戻るまで（長くても SettleTime）続ける
                 if (_hold && !act && (Time.time > _holdUntil || ((now - _ref).magnitude < 0.03f && Quaternion.Angle(nowRot, _refRot) < 8f))) _hold = false;

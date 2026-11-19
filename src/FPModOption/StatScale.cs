@@ -53,10 +53,25 @@ namespace FPModOption
         public static int OrigControl(WeaponItem wi) => wi != null && _orig.TryGetValue(wi.Id, out var o) ? o.Control : wi?.Control ?? 0;
         public static int OrigErgo(WeaponItem wi) => wi != null && _orig.TryGetValue(wi.Id, out var o) ? o.Ergo : wi?.Ergonomic ?? 0;
 
+        static readonly Dictionary<int, WeaponItem> _items = new();
+
+        // co-op に入ったとき：表示のエルゴ・コントロールをゲームの元の値に戻す（武器のデータはシーンが変わっても残る）
+        public static void Revert()
+        {
+            int n = 0;
+            foreach (var kv in _items)
+            {
+                var wi = kv.Value;
+                if (wi == null || wi.WasCollected || !_orig.TryGetValue(kv.Key, out var o)) continue;
+                wi.Ergonomic = o.Ergo; wi.Control = o.Control; n++;
+            }
+            Core.Log($"[coop] shown ergo/control restored on {n} weapon(s)");
+        }
+
         // 武器の一覧ができたとき（Weapons）。エルゴ・コントロールを使う Mod が動いているときだけ
         public static void Apply(IEnumerable<WeaponItem> items)
         {
-            if (_applied || GameVersion.Disabled) return;
+            if (_applied || GameVersion.Disabled || CoopGuard.Off) return;
             if (!Settings.Enabled("FPRarity") && !Settings.Enabled("FPCustom")) return;
             _applied = true;
             var log = new List<string>();
@@ -65,6 +80,7 @@ namespace FPModOption
                 var w = wi?.Weapon;
                 if (w == null || wi.Id == RpgId) continue;
                 if (!_orig.ContainsKey(wi.Id)) _orig[wi.Id] = (wi.Ergonomic, wi.Control);
+                _items[wi.Id] = wi;
                 float aim = AdsSpeed.Original(AdsSpeed.SettingsOf(w)), recoil = RecoilOf(w);
                 if (aim > 0f) wi.Ergonomic = ShownErgo(aim);
                 if (recoil > 0f) wi.Control = ShownControl(recoil);

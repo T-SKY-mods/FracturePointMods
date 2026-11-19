@@ -67,7 +67,7 @@ namespace FPCustom
             {
                 var t = typeof(Il2Cpp.LootSeller);
                 foreach (var name in new[] { "Interact", "GetInventoryLootPrice" })
-                    h.Patch(AccessTools.Method(t, name), new HarmonyMethod(typeof(Parts), nameof(Hold)), new HarmonyMethod(typeof(Parts), nameof(Release)));
+                    h.Patch(AccessTools.Method(t, name), FPModOption.CoopGuard.Hm(typeof(Parts), nameof(Hold)), FPModOption.CoopGuard.Hm(typeof(Parts), nameof(Release)));
                 SellPatched = true;
             }
             catch (Exception e) { Main.Log("[parts] sell patch failed: " + e.Message); }

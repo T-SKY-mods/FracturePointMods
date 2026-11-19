@@ -33,6 +33,8 @@ namespace FPModOption
                 // リーダーボードの送信停止が効かないなら、Mod を使ったランが送信されてしまうので全体を止める
                 Leaderboard.Install(HarmonyInstance);
                 if (!Leaderboard.Active) { GameVersion.Disable("リーダーボード送信の停止に失敗"); return; }
+                // co-op では Mod を使わない（co-op が始まったら、この起動の間は全 Mod の処理を止める）
+                CoopGuard.Install(HarmonyInstance);
                 Weapons.Install(HarmonyInstance);
                 ReloadSpeed.Install(HarmonyInstance);
                 ModTab.Install(HarmonyInstance);
@@ -46,13 +48,18 @@ namespace FPModOption
             Core.Log($"SCENE {buildIndex} {sceneName}");
             Core.SetScene(sceneName);
             Refs.Clear();
-            Weapons.OnSceneChanged();
-            ModTab.OnSceneChanged();
+            if (!CoopGuard.Off)
+            {
+                Weapons.OnSceneChanged();
+                ModTab.OnSceneChanged();
+            }
             TestMode.OnSceneLoaded(sceneName);
         }
 
         public override void OnUpdate()
         {
+            CoopGuard.Tick();
+            if (CoopGuard.Off) { TestMode.Update(); return; }   // co-op では Mod の処理をしない（自動テストだけ動かす）
             GameVersion.NotifyIfNeeded(Core.Scene);
             TestMode.Update();
             try { ModTab.Tick(); } catch (Exception e) { Core.LogOnce("modtab", "[modtab] tick failed: " + e); }

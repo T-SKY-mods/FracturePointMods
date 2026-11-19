@@ -14,7 +14,7 @@ namespace FPModOption
     public static class ReloadSound
     {
         static readonly Dictionary<(IntPtr, int), AudioClip> _cache = new();
-        const long VolumeRva = 0x425ABA4;   // OnReload が PlayOneShot に渡す音量（build 25787540）
+        const long VolumeRva = 0x452C0CC;   // OnReload が PlayOneShot に渡す音量（build 26773098。以前の 25787540 は 0x425ABA4）
         static float _volume = -1f;
 
         public static (string clip, float origLen, float newLen, int sounds) LastForTest;
@@ -40,6 +40,8 @@ namespace FPModOption
             _volume = 1f;
             try
             {
+                // 場所はビルドごとに違う。未検証のビルドでは読まない（別の値を読まないように）
+                if (GameVersion.Untested) { Core.Log("[reload] untested game build: sound volume 1"); return _volume; }
                 var mod = System.Diagnostics.Process.GetCurrentProcess().Modules.Cast<System.Diagnostics.ProcessModule>()
                     .FirstOrDefault(x => string.Equals(x.ModuleName, "GameAssembly.dll", StringComparison.OrdinalIgnoreCase));
                 if (mod != null)

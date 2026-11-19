@@ -280,7 +280,7 @@ namespace FPCustom
                 }
                 foreach (var id in Pistols)
                     Check($"{Tracker.NameOf(id)}: pistol muzzles and lasers", new[] { "p_arrowhead", "p_linear_comp", "p_flash_hider" }.All(g => Catalog.For(id, Cat.Muzzle).Any(a => a.Id == g)) && Catalog.For(id, Cat.SideRail).Count == 3);
-                Check("lean hand shake hook installed", Effects.TremorPatched);
+                Check("lean hand shake hook installed (or not needed)", Effects.TremorPatched);
             }));
             // 横からの画像（銃だけ）。グリップ・バイポッドは付けられる武器すべて（バイポッドはレールの下面も測る：BIPODAT）
             for (int id0 = 0; id0 < 64; id0++)   // 持っていない武器も（所持の一覧は場面で変わる）

@@ -77,6 +77,18 @@ namespace FPModOption
             try { return wi == null ? Tier.Common : (Tier)(int)wi.GetRarity(); } catch { return Tier.Common; }
         }
 
+        // ゲームで手に入る武器か。データだけ先に入っていてまだ手に入らない武器（build 26773098 の PKP = id 30 など）は Mod の一覧に出さない。
+        //   確かめた武器（KnownMaxId まで）か、プレイヤーが手持ち・保管庫に持っている武器。武器アップデートで確かめたら KnownMaxId を上げる
+        public const int KnownMaxId = 29;
+        static readonly HashSet<int> _owned = new();
+        public static bool Released(int id)
+        {
+            if (id < 0) return false;
+            if (id <= KnownMaxId || _owned.Contains(id)) return true;
+            if (HeldIds().Contains(id) || StashIds().Contains(id)) { _owned.Add(id); return true; }
+            return false;
+        }
+
         public static bool IsHandgun(int weaponId) => ItemById(weaponId) is { } wi && wi.Type == WeaponItem.SlotType.Small;
 
         static string PrefabName(GameObject go) => go == null ? null : go.name.Replace("(Clone)", "").Trim();

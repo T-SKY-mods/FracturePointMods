@@ -58,7 +58,7 @@ namespace FPModOption
 
         // 成功したら true。共有実体・未発見なら false（ログに理由を残す）
         public static bool Patch(HarmonyLib.Harmony h, Type type, string method, Type[] args,
-                                 string prefix = null, string postfix = null, Type patchClass = null)
+                                 string prefix = null, string postfix = null, Type patchClass = null, bool gate = true)
         {
             if (_ptrCount == null) BuildIndex();
             var name = $"{type.Name}.{method}";
@@ -75,7 +75,8 @@ namespace FPModOption
             }
 
             if (patchClass == null) { Core.Log($"[patch] no patch class for {name}"); return false; }
-            HarmonyMethod Hm(string n) => n == null ? null : new HarmonyMethod(AccessTools.Method(patchClass, n));
+            // co-op の間は中身を呼ばない（CoopGuard.Wrap）。リーダーボード送信の停止など co-op でも続けるものは gate: false
+            HarmonyMethod Hm(string n) => n == null ? null : new HarmonyMethod(gate ? CoopGuard.Wrap(AccessTools.Method(patchClass, n)) : AccessTools.Method(patchClass, n));
             try
             {
                 h.Patch(m, Hm(prefix), Hm(postfix));

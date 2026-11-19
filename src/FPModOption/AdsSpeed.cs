@@ -55,10 +55,26 @@ namespace FPModOption
             if (w.Pointer == _weapon && Mathf.Abs(m - _set) < 0.0001f) return;
             var a = SettingsOf(w);
             if (a == null) return;
-            if (!_orig.ContainsKey(a.Pointer)) _orig[a.Pointer] = a.aimingSpeed;
+            if (!_orig.ContainsKey(a.Pointer)) { _orig[a.Pointer] = a.aimingSpeed; _objs[a.Pointer] = a; }
             a.aimingSpeed = _orig[a.Pointer] * m;
             _weapon = w.Pointer; _set = m;
             LastMultForTest = m; LastSettingsForTest = a;
+        }
+
+        static readonly Dictionary<IntPtr, AdsLayerSettings> _objs = new();
+
+        // co-op に入ったとき：書き換えたエイムの速さを元に戻す（設定はゲームのデータなので、シーンが変わっても残る）
+        public static void Revert()
+        {
+            int n = 0;
+            foreach (var kv in _objs)
+            {
+                var a = kv.Value;
+                if (a == null || a.WasCollected) continue;
+                a.aimingSpeed = _orig[kv.Key]; n++;
+            }
+            Refresh();
+            Core.Log($"[coop] ads speed restored on {n} setting(s)");
         }
 
         // 次のフレームで書き直す（テスト・付け替えのとき）

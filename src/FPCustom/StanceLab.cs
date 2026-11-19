@@ -310,7 +310,7 @@ namespace FPCustom
             {
                 // 短い手順：構え → リロード → 弾薬チェック → 空のマガジンからのリロード → 結果
                 At(0.6f, "aim", () => fps.OnAim(true));
-                At(1.0f, "aimcheck", () => { var ads = Stance.WeightForTest; Main.Log($"[test] CHECK {cfg} ({Tracker.NameOf(id)}): aim pose untouched (weight {ads:0.00}): {(ads < 0.01f ? "PASS" : "FAIL")}");
+                At(1.3f, "aimcheck", () => { var ads = Stance.WeightForTest; Main.Log($"[stlab] {cfg}: ergo {AdsSpeed.ErgoOf(dw):0.#} aimingSpeed {AdsSpeed.SettingsOf(dw)?.aimingSpeed:0.##}"); Main.Log($"[test] CHECK {cfg} ({Tracker.NameOf(id)}): aim pose untouched (weight {ads:0.00}): {(ads < 0.01f ? "PASS" : "FAIL")}");
                     // 肩に当てたエイム：カメラがサイトへ寄る設定・床尾が肩の位置・カメラが銃の真後ろ
                     if (Stance.Mode == 3 && Stance.StockedId(id))
                     {
@@ -322,7 +322,7 @@ namespace FPCustom
                         Main.Log($"[test] CHECK {cfg} ({Tracker.NameOf(id)}): shouldered aim (camera blend {blend:0.#}, bone {Stance.AimBoneForTest}, butt in head {butt.ToString("F3")}, camera from the gun x {camW.x * 1000:0.0}mm z {camW.z * 1000:0}mm): {(blend == 1f && Stance.AimBoneForTest == "Camera" && butt.y < -0.080f && butt.x > 0.055f && Mathf.Abs(camW.x) < 0.006f && camW.z < -0.10f ? "PASS" : "FAIL")}");
                     }
                 });
-                At(1.3f, "unaim", () => fps.OnAim(fps.toggleAim));
+                At(1.6f, "unaim", () => fps.OnAim(fps.toggleAim));
                 At(2.0f, "reload", () => { Stance.MaxDist = Stance.MaxAngle = Stance.RawAngle = 0f; var m = dw.SelectedMag; if (m != null) m.AmmoCount = 1; fps.OnReload(); });
                 At(6.6f, "ammo", () => fps.OnCheckAmmo());
                 At(9.0f, "emptyreload", () => { var m = dw.SelectedMag; if (m != null) m.AmmoCount = 0; fps.OnReload(); });

@@ -72,12 +72,12 @@ namespace FPCustom
 
         public override void OnSceneWasLoaded(int buildIndex, string sceneName)
         {
-            if (Enabled) CustomUi.OnSceneChanged();
+            if (Enabled && !CoopGuard.Off) CustomUi.OnSceneChanged();
         }
 
         public override void OnUpdate()
         {
-            if (!Enabled || GameVersion.Disabled) return;
+            if (!Enabled || GameVersion.Disabled || CoopGuard.Off) return;
             try { CustomUi.Tick(); } catch (Exception e) { Log("[ui] tick failed: " + e); }
             Effects.Tick();
             Parts.Release();

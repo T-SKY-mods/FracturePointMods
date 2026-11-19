@@ -84,9 +84,14 @@ namespace FPCustom
 
         public static Att Get(string id) => All.FirstOrDefault(a => a.Id == id);
 
+        // 見た目の位置（銃口・レール・グリップ・サイト・ストック）を確かめた武器。build 26773098 の時点の id 0〜29。
+        // それより後に増えた武器（このビルドで先に入っている PKP = id 30、今後の武器アップデートの武器）は、確かめて Fits などに足してからここを上げる
+        public const int CheckedMaxId = 29;
+        public static bool Checked(int weaponId) => weaponId >= 0 && weaponId <= CheckedMaxId;
+
         public static bool IsPistol(int weaponId) => Tracker.ItemById(weaponId)?.Type == WeaponItem.SlotType.Small;
 
-        public static bool Eligible(WeaponItem wi) => wi != null && wi.Id != RpgId;
+        public static bool Eligible(WeaponItem wi) => wi != null && wi.Id != RpgId && FPModOption.Weapons.Released(wi.Id);
 
         public static Cat[] CatsFor(int weaponId) => IsPistol(weaponId) ? PistolCats : RifleCats;
 
@@ -94,6 +99,8 @@ namespace FPCustom
         public static List<Att> For(int weaponId, Cat cat)
         {
             bool pistol = IsPistol(weaponId);
+            // 位置を合わせていない新しい武器は、見た目の無いもの（マガジン）だけ
+            if (!Checked(weaponId)) return All.Where(a => a.Cat == cat && a.Pistol == pistol && a.Source == Source.StatsOnly).ToList();
             if (cat == Cat.Muzzle && NoMuzzle.Contains(weaponId)) return new List<Att>();
             return All.Where(a => a.Cat == cat && a.Pistol == pistol && (!a.OnlyFactory || IsFactory(a, weaponId)) && (IsFactory(a, weaponId) || cat switch { Cat.Grip => Grips.Supported(weaponId, a), Cat.Sight => Optics.Supported(weaponId, a), _ => AssetParts.Supported(weaponId, a) })).ToList();
         }

@@ -28,6 +28,8 @@ namespace FPCustom
             // 見た目の確認をまとめて 1 回で（部品の横からの撮影＋構えたときの見え方）
             TestMode.ExternalScenarios["custvis"] = () => { var s = PartsLab.Steps(); s.AddRange(Steps()); return s; };
             // 見た目＋付け外しの確認をまとめて 1 回で
+            // AKSU の構え＋付け外しだけ（ゲームの更新の後の確認）
+            TestMode.ExternalScenarios["custaksu"] = () => { var s = Steps(new HashSet<int> { 11 }); s.AddRange(MountTest.Steps()); return s; };
             TestMode.ExternalScenarios["custall"] = () => { var s = PartsLab.Steps(); s.AddRange(Steps()); s.AddRange(MountTest.Steps()); return s; };
         }
 

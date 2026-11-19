@@ -33,8 +33,13 @@ namespace FPOptimize
         static bool[] _keep = new bool[64];
         static double _ms;
 
+        // この軽量化が要るゲームのビルド。build 26773098（co-op の更新）でゲーム側が死体の判定を書き直し、例外が起きなくなったので不要。
+        // しかも SlotRva はこのビルドの中の場所なので、ほかのビルドで読むと別の値を読んでゲームが固まる（26773098 のエンドレスで確認）
+        const string NeededBuildGuid = "4f260e57b1bf43b3b51f9793578eb875";
+
         public static void Install(HarmonyLib.Harmony _)
         {
+            if (Main.BuildGuid != NeededBuildGuid) { Main.Log("[ai] not needed in this game build (the game no longer throws there): OFF"); return; }
             var h = new HarmonyLib.Harmony("FPOptimize.AiSight");
             if (!SafePatcher.Patch(h, typeof(LookDecision), "MyHandleBodys", null, typeof(AiSight), nameof(Pre)))
             {

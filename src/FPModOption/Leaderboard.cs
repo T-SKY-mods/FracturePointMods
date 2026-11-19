@@ -20,10 +20,13 @@ namespace FPModOption
         {
             var t = typeof(GameApiClient);
             var cls = typeof(Leaderboard);
-            bool a = SafePatcher.Patch(h, t, "StartRunAsync", null, nameof(StartRun_Pre), null, cls);
-            bool b = SafePatcher.Patch(h, t, "CompleteFloorAsync", null, nameof(CompleteFloor_Pre), null, cls);
-            bool c = SafePatcher.Patch(h, t, "FinishRunAsync", null, nameof(FinishRun_Pre), null, cls);
+            bool a = SafePatcher.Patch(h, t, "StartRunAsync", null, nameof(StartRun_Pre), null, cls, gate: false);
+            bool b = SafePatcher.Patch(h, t, "CompleteFloorAsync", null, nameof(CompleteFloor_Pre), null, cls, gate: false);
+            bool c = SafePatcher.Patch(h, t, "FinishRunAsync", null, nameof(FinishRun_Pre), null, cls, gate: false);
             Active = a && b && c;
+            // 保険：上の 3 つ以外の送信（今後の更新で増えるアリーナのスコア送信など）も、読み取り（GET）以外は送らない
+            SendNetOn = SafePatcher.Patch(h, t, "SendAuthorizedAsync", null, nameof(SendAuthorized_Pre), null, cls, gate: false);
+            if (!SendNetOn) Core.Log("[leaderboard] safety net for other submissions not installed (the 3 known ones are still blocked)");
             Core.Log(Active ? "[leaderboard] submission blocked (start/floor/finish)"
                             : $"[leaderboard] WARNING: block incomplete start={a} floor={b} finish={c}");
         }
@@ -57,6 +60,27 @@ namespace FPModOption
             catch (Exception e)
             {
                 Core.Log("[leaderboard] CompleteFloor intercept failed, letting original run: " + e);
+                return true;
+            }
+        }
+
+        public static bool SendNetOn;
+        public static int BlockedOther;
+
+        // 認証済みの送信の入口。読み取り（GET）だけ通し、それ以外は通信せずに「通信に失敗した」ことにする（ゲームはオフラインのときと同じ扱いになる）
+        static bool SendAuthorized_Pre(string method, string path, ref Il2CppSystem.Threading.Tasks.Task<string> __result)
+        {
+            try
+            {
+                if (string.Equals(method, "GET", StringComparison.OrdinalIgnoreCase)) return true;
+                BlockedOther++;
+                __result = Task.FromException<string>(new Il2CppSystem.Exception("FPModOption: leaderboard submission blocked while mods are installed"));
+                Core.Log($"[leaderboard] blocked {method} {path} (not sent)");
+                return false;
+            }
+            catch (Exception e)
+            {
+                Core.Log("[leaderboard] safety net failed, letting original run: " + e.Message);
                 return true;
             }
         }

@@ -25,6 +25,7 @@ namespace FPRarity
         {
             var steps = new List<(string, Action)>
             {
+                ("main weapon for the test", TestKit.EnsureMainWeapon),
                 ("count shots", InstallShotCounter),
                 ("force boss floor 50 + start endless run", () =>
                 {
@@ -36,12 +37,13 @@ namespace FPRarity
             steps.Add(("enter elevator + move", () => EndlessProbe.EnterAndMove()));
             for (int i = 0; i < 16; i++) steps.Add(("wait / pick card", EndlessProbe.PickCard));
             steps.Add(("fight", () => MelonCoroutines.Start(Fight())));
-            for (int i = 0; i < 200; i++) steps.Add(("wait", () => { if (_done) TestMode.SkipWaitsForTest(); }));
+            for (int i = 0; i < 400; i++) steps.Add(("wait", () => { if (_done) TestMode.SkipWaitsForTest(); }));
             steps.Add(("check", Report));
             return steps;
         }
 
         static bool _done;
+        static int _bursts;
         static readonly List<string> _results = new();
 
         static void InstallShotCounter()
@@ -74,7 +76,7 @@ namespace FPRarity
                 int shots0 = _shots;
                 bool firstHitSeen = false;
                 float t0 = Time.time;
-                while (boss.health > 0f && Time.time - t0 < 60f)
+                while (boss.health > 0f && Time.time - t0 < 120f)
                 {
                     if (!PlaceFacing(fps, boss)) { yield return new WaitForSeconds(0.2f); continue; }
                     for (int w = 0; w < 25 && !GameIsForeground(); w++) yield return new WaitForSeconds(0.2f);
@@ -84,6 +86,12 @@ namespace FPRarity
                     float burst = Time.time;
                     while (Time.time - burst < 0.6f && boss.health > 0f) { AimAt(fps, boss); yield return null; }
                     Mouse(LeftUp);
+                    // 当たらないときの手がかり：画面の中心の先にあるもの（10 回に 1 回）
+                    if (++_bursts % 10 == 0 && Camera.main is { } dc)
+                    {
+                        var hitName = Physics.Raycast(dc.transform.position, dc.transform.forward, out var dh, 200f, ~0, QueryTriggerInteraction.Ignore) ? $"{dh.collider.name} ({dh.collider.transform.root.name}) at {dh.distance:0.0}m" : "nothing";
+                        Main.Log($"[bossfire] {name} hp={boss.health:0} dist={Vector3.Distance(fps.transform.position, boss.transform.position):0.0}m alive={boss.gameObject.activeInHierarchy} center hits {hitName} shots={_shots - shots0}");
+                    }
                     yield return new WaitForSeconds(0.15f);
                     if (!firstHitSeen && boss.health < hp)
                     {
@@ -149,7 +157,18 @@ namespace FPRarity
             if (w?.SelectedMag != null) w.SelectedMag.AmmoCount = w.SelectedMag.MaxAmmoCount;
         }
 
-        static Vector3 Chest(Il2CppEnemyAI.EnemyHealth boss) => boss.transform.position + Vector3.up * 1.35f;
+        // 狙う所：ボスの胸の骨（spine_02）。前かがみになっても体に当たる（見つからなければ足元から 1.35m 上）
+        static readonly Dictionary<IntPtr, Transform> _spine = new();
+        static Vector3 Chest(Il2CppEnemyAI.EnemyHealth boss)
+        {
+            if (!_spine.TryGetValue(boss.Pointer, out var t) || t == null)
+            {
+                var root = boss.transform.parent != null ? boss.transform.parent : boss.transform;
+                t = root.GetComponentsInChildren<Transform>(true).FirstOrDefault(x => x.name == "spine_02");
+                _spine[boss.Pointer] = t;
+            }
+            return t != null ? t.position : boss.transform.position + Vector3.up * 1.35f;
+        }
 
         // ボスから 5〜8m 離れた、ボスの胸が見える場所に立つ（ボスが動いたら立ち直す）
         static Vector3 _stand;

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -57,6 +57,12 @@ namespace FPRarity
             S["bossmulti"] = () => EndlessProbe.BossMultiSteps();
             S["bossshot"] = () => EndlessProbe.BossShotSteps();
             S["slide"] = () => SlideProbe.Steps();
+            S["stocksprint"] = SlideProbe.StockSprintSteps;
+            S["simulfire"] = SlideProbe.SimulSteps;
+            S["simulbisect"] = SlideProbe.SimulBisectSteps;
+            S["perfcoop"] = PerfCoop.Steps;
+            S["wallfire"] = SlideProbe.WallSteps;
+            S["coopprof"] = CoopProfile.Steps;
             S["slideprobe"] = () => SlideProbe.Steps();
             S["bossfire"] = () => BossFireTest.Steps();
             S["lootfloor"] = () =>
@@ -99,6 +105,18 @@ namespace FPRarity
             S["perf"] = () => PerfProbe.Steps(boss: false);
             S["perfboss"] = () => PerfProbe.Steps(boss: true);
             S["perffight"] = () => PerfProbe.Steps(boss: true, fight: true);
+            // 本当の撃ち合い：敵は倒れる（ダメージそのまま）・敵も撃ち返す。プレイヤーだけ無敵
+            S["perfreal"] = () => { PerfProbe.Real = true; return PerfProbe.Steps(boss: true, fight: true); };
+            // 跳弾の重さ：5 秒ごとに跳弾あり/なし（なしは測定のためだけ）を切り替えて、弾の処理の時間と当たりの数を比べる
+            S["legendless"] = LegEndless.Steps;
+            S["coopgate"] = CoopGateTest.Steps;
+            S["weaponaudit"] = WeaponAudit.Steps;
+            S["perfreal_ric"] = () => { PerfProbe.Real = true; PerfProbe.RicAB = true; return PerfProbe.Steps(boss: true, fight: true); };
+            S["perfreal_ab"] = () => { PerfProbe.Real = true; PerfProbe.AB = true; return PerfProbe.Steps(boss: true, fight: true); };
+            S["perfreal_filteroff"] = () => { PerfProbe.Real = true; Type.GetType("FPOptimize.ImpactSound, FPOptimize")?.GetField("FilterStaysOff")?.SetValue(null, true); return PerfProbe.Steps(boss: true, fight: true); };
+            S["perfreal_norev"] = () => { PerfProbe.Real = true; PerfProbe.OffFirst = "|AudioReverbFilter|"; return PerfProbe.Steps(boss: true, fight: true); };
+            S["perfreal_nosteam"] = () => { PerfProbe.Real = true; PerfProbe.OffFirst = "|SteamAudioSource|"; return PerfProbe.Steps(boss: true, fight: true); };
+            S["perfreal_noaudio"] = () => { PerfProbe.Real = true; PerfProbe.OffFirst = "|AudioSource|AudioReverbFilter|SteamAudioSource|"; return PerfProbe.Steps(boss: true, fight: true); };
             S["langcheck"] = () => LangCheck.Steps();
             S["stashtip"] = () => LangCheck.StashSteps();
             S["opticscan"] = () => SightLab.OpticScanSteps();

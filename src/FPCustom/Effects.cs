@@ -219,7 +219,8 @@ namespace FPCustom
 
             Patch(h, typeof(DemoWeapon), "OnEquip", null, nameof(OnEquip_Post));
             HitPatched = Patch(h, typeof(Il2CppBallistics.BulletHandler), "BulletHit", nameof(BulletHit_Pre), nameof(BulletHit_Post));
-            TremorPatched = Patch(h, typeof(Il2Cpp.PlayerHealthManager), "Update", null, nameof(HealthUpdate_Post));
+            // 使っている部品が無いときは入れない（build 26773098 ではエンドレスで元の Update が毎フレーム例外を出す。パッチがあるとそれが MelonLoader のログに毎フレーム書かれて重くなる）
+            TremorPatched = Lean.Length == 0 || Patch(h, typeof(Il2Cpp.PlayerHealthManager), "Update", null, nameof(HealthUpdate_Post));
             // 弾込めが遅いのはラン中のボタンだけ（保管庫で弾を入れるのはそのまま）
             if (Patch(h, typeof(Il2Cpp.AmmoButtonLoader._LoadMagsSequentially_d__23), "MoveNext", null, nameof(ButtonLoad_Post))) LoadPatchesForTest++;
             // 拡張マガジン：セーブには元のマガジンの大きさで書く（Mod を外すと元の大きさ、余った弾は消える）
@@ -238,7 +239,7 @@ namespace FPCustom
             {
                 var m = AccessTools.Method(t, name);
                 if (m == null) { Main.Log($"[effect] {t.Name}.{name} not found"); return false; }
-                h.Patch(m, pre == null ? null : new HarmonyMethod(typeof(Effects), pre), post == null ? null : new HarmonyMethod(typeof(Effects), post));
+                h.Patch(m, pre == null ? null : FPModOption.CoopGuard.Hm(typeof(Effects), pre), post == null ? null : FPModOption.CoopGuard.Hm(typeof(Effects), post));
                 return true;
             }
             catch (Exception e) { Main.Log($"[effect] patch {t.Name}.{name} failed: {e.Message}"); return false; }

@@ -22,6 +22,7 @@ namespace FPHitMarker
                 if (GameVersion.Disabled) { Core.Log("[hit] all mods are disabled: hit marker OFF"); return; }
                 if (!Settings.Enabled("FPHitMarker")) { Core.Log("[hit] turned off in the MOD tab"); return; }
                 Active = Hits.Install(HarmonyInstance);
+                CoopGuard.Entered += Marker.Hide;   // co-op に入ったら出ている印を消す
                 HitTest.Register();
                 Core.Log($"[hit] hit marker {(Active ? "on" : "OFF (patch failed)")}");
             }
@@ -30,7 +31,7 @@ namespace FPHitMarker
 
         public override void OnUpdate()
         {
-            if (!Active) return;
+            if (!Active || CoopGuard.Off) return;
             try { Marker.Tick(); } catch (Exception e) { Core.LogOnce("hitmarker", "[hit] draw failed: " + e.Message); }
         }
     }
@@ -50,7 +51,7 @@ namespace FPHitMarker
             var m = AccessTools.Method(typeof(Il2CppBallistics.BulletHandler), "BulletHit");
             if (m == null) { Core.Log("[hit] BulletHandler.BulletHit not found"); return false; }
             // 武器カスタマイズmod が部位の倍率を変える前処理より後に見る（効いている倍率で青を決める）
-            h.Patch(m, new HarmonyMethod(typeof(Hits), nameof(Pre)) { priority = Priority.Last }, new HarmonyMethod(typeof(Hits), nameof(Post)) { priority = Priority.First });
+            h.Patch(m, CoopGuard.Hm(new HarmonyMethod(typeof(Hits), nameof(Pre)) { priority = Priority.Last }), CoopGuard.Hm(new HarmonyMethod(typeof(Hits), nameof(Post)) { priority = Priority.First }));
             return true;
         }
 

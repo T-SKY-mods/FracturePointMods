@@ -362,7 +362,7 @@ namespace FPModOption
                 var settings = Movement?.movementSettings;
                 if (settings == null) return;
                 if (!_baseGaits.TryGetValue(settings.Pointer, out var b))
-                    _baseGaits[settings.Pointer] = b = (settings.walking.velocity, settings.sprinting.velocity, settings.crouching.velocity, settings.slideSpeed);
+                { _baseGaits[settings.Pointer] = b = (settings.walking.velocity, settings.sprinting.velocity, settings.crouching.velocity, settings.slideSpeed); _gaitObjs[settings.Pointer] = settings; }
                 // 移動速度はハンドガンの動きのハンドガンだけ、スライディングの速さはハンドガンの動き全部
                 bool mobile = Mobile();
                 float m = mobile && PistolActive() ? PistolMoveSpeed : 1f;
@@ -377,6 +377,24 @@ namespace FPModOption
             {
                 Core.Log("[slide] move speed update failed: " + e.Message);
             }
+        }
+
+        static readonly Dictionary<IntPtr, Il2CppDemo.Scripts.Runtime.Character.FPSMovementSettings> _gaitObjs = new();
+
+        // co-op に入ったとき：書き換えた移動の速さ・スライディングの速さを元に戻す（移動の設定はゲームのデータなので、シーンが変わっても残る）
+        public static void Revert()
+        {
+            int n = 0;
+            foreach (var kv in _gaitObjs)
+            {
+                var s = kv.Value;
+                if (s == null || s.WasCollected || !_baseGaits.TryGetValue(kv.Key, out var b)) continue;
+                s.walking = WithVelocity(s.walking, b.walk);
+                s.sprinting = WithVelocity(s.sprinting, b.sprint);
+                s.crouching = WithVelocity(s.crouching, b.crouch);
+                s.slideSpeed = b.slide; n++;
+            }
+            Core.Log($"[coop] movement speeds restored on {n} setting(s)");
         }
 
         static GaitSettings WithVelocity(GaitSettings g, float v) { g.velocity = v; return g; }

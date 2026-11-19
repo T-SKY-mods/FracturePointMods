@@ -71,7 +71,9 @@ namespace FPRarity
             {
                 Check("page opened", MasteryUi.IsOpen);
                 Main.Log("[test] details: " + MasteryUi.DetailsTextForTest);
-                Check("all weapons listed (29)", MasteryUi.DetailsTextForTest.Contains("cards=29"));
+                // ゲームの武器の数で決める（build 26773098 で PKP が増えて 30）
+                int want = Weapons.All().Count(w => w != null && Mastery.Eligible(w.Id));
+                Check($"all weapons listed ({want})", MasteryUi.DetailsTextForTest.Contains($"cards={want}"));
                 Shot("mastery_0_open");
             }),
             ("allocate dmg x2 + control x1 + one too many", () =>

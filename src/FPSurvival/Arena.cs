@@ -1381,6 +1381,24 @@ namespace FPSurvival
         internal static int CrateDollarWavesForTest = -1;   // テスト用：武器箱のドルだけこのウェーブとして出す
         public static int RelocatedForTest => _relocated;
         public static GameObject CrateForTest => _crate;
+        // 調査用：武器箱の抽選（レアリティ・大型・小型）を、今の手持ちのまま n 回だけ同じ処理で引いて数える（武器は渡さない）
+        public static Dictionary<string, int> CrateSampleForTest(int n, int waves, bool hard)
+        {
+            var count = new Dictionary<string, int>();
+            var inv = Refs.Inv;
+            for (int i = 0; i < n; i++)
+            {
+                var tier = Waves.CrateTier(waves, Rng, hard);
+                foreach (var slot in new[] { WeaponItem.SlotType.Big, WeaponItem.SlotType.Small })
+                {
+                    var wi = PickCrateWeapon(inv, slot);
+                    if (wi == null) continue;
+                    var key = $"{slot}|{wi.GetName()}|{tier}";
+                    count[key] = count.TryGetValue(key, out var c) ? c + 1 : 1;
+                }
+            }
+            return count;
+        }
         public static GameObject GateForTest => _gate;
         public static GameObject ExitForTest => _exit;
         public static DoorInteraction ExitDoorForTest => _exitDoor;

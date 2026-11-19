@@ -26,6 +26,8 @@ namespace FPRarity
         {
             var s = new List<(string, Action)>
             {
+                ("main weapon for the test", TestKit.EnsureMainWeapon),
+                ("wait", () => { }),
                 ("factor", () => Check($"delay factor read ({ReloadSpeed.Factor:0.###})", ReloadSpeed.Factor > 0f)),
                 ("equip primary", () => Equip(WeaponItem.SlotType.Big)),
             };
@@ -143,6 +145,14 @@ namespace FPRarity
             var w = Active();
             if (w?.SelectedMag == null) { Check("active weapon with a mag", false); return; }
             w.SelectedMag.AmmoCount = Math.Max(0, w.SelectedMag.AmmoCount - 1);   // 満タンだとリロードしない
+            // 予備のマガジンが無いとリロードしない（テストで加えた武器など）
+            int wid = Tracker.RollFor(w)?.WeaponId ?? -1; var wname = wid >= 0 ? Tracker.ItemById(wid)?.GetName() : null;
+            if (wname != null && !Tracker.Inv.MagStored.ToArray().Any(m => m != null && m.WeaponName == wname && m.AmmoCount > 0))
+            {
+                Tracker.Inv.AddMag(wid);
+                foreach (var m in Tracker.Inv.MagStored) if (m != null && m.WeaponName == wname) m.AmmoCount = m.MaxAmmoCount;
+                Main.Log($"[reloadtest] added a spare mag for {wname}");
+            }
             var clip = w.reloadClip?.clip;
             _expect = clip == null ? -1f : clip.length * ReloadSpeed.Factor / expectSpeed;
             ReloadSpeed.StartedAt = ReloadSpeed.EndedAt = -1f;

@@ -1,7 +1,8 @@
-﻿Fracture Point fan MOD set 1.3.0
+﻿Fracture Point fan MOD set 1.4.0
 =====================================
 
-Game : Steam build 25787540 / Mod loader: MelonLoader 0.7.3
+Game : Steam build 26773098 (Update 21, co-op) / Mod loader: MelonLoader 0.7.3
+Co-op : the mods turn themselves off in co-op (restart the game to use them in solo again)
 Japanese: README_JA.txt
 
   Install.bat                         installs all mods at once

@@ -126,6 +126,15 @@ namespace FPModOption
             }
         }
 
+        // テスト用：残りのステップを飛ばして終える（何周も回す調査で、早く終わったとき）
+        public static void Finish()
+        {
+            if (_steps == null || _step < 0 || _step >= _steps.Count) return;
+            _step = _steps.Count;
+            Core.Log("[test] ALL DONE (finished early)");
+            _quitAt = Time.realtimeSinceStartup + 3f;
+        }
+
         static void Begin(List<(string name, Action act)> steps, float now)
         {
             _steps = steps;

@@ -32,6 +32,7 @@ namespace FPSurvival
                 if (!Patches.Install(HarmonyInstance)) { Log("[init] patches failed: survival mode OFF"); HarmonyInstance.UnpatchSelf(); return; }
                 Stash.Load();
                 SurvivalTest.Register();
+                LegStat.Register();
                 SurvivalProbe.Register();
                 Enabled = true;
                 Log("[init] OK");
@@ -42,7 +43,7 @@ namespace FPSurvival
         public override void OnSceneWasLoaded(int buildIndex, string sceneName)
         {
             Scene = sceneName;
-            if (!Enabled) return;
+            if (!Enabled || CoopGuard.Off) return;
             Tablet.OnSceneLoaded();
             Arena.OnSceneLoaded();
             Stash.OnSceneLoaded();
@@ -50,7 +51,7 @@ namespace FPSurvival
 
         public override void OnUpdate()
         {
-            if (!Enabled || GameVersion.Disabled) return;
+            if (!Enabled || GameVersion.Disabled || CoopGuard.Off) return;
             try { Stash.Tick(); } catch (Exception e) { Log("[stash] tick failed: " + e); }
             try { Tablet.Tick(); } catch (Exception e) { Log("[tablet] tick failed: " + e); }
             try { Arena.Tick(); } catch (Exception e) { Log("[arena] tick failed: " + e); }

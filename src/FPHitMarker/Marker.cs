@@ -44,6 +44,8 @@ namespace FPHitMarker
             Tick();
         }
 
+        public static void Hide() { if (_root != null) _root.SetActive(false); }
+
         public static void Tick()
         {
             if (_root == null || !_root.activeSelf) return;

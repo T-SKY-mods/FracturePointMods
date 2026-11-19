@@ -113,7 +113,8 @@ namespace FPSurvival
                 var held = Survival.Held(Refs.Inv);
                 Check("current loadout allowed", Survival.CheckLoadout(held) == null);
                 var two = held.Concat(held.Where(w => w.Item.Type == WeaponItem.SlotType.Big)).ToList();
-                Check("two primaries refused", Survival.CheckLoadout(two) != null);
+                if (two.Count > held.Count) Check("two primaries refused", Survival.CheckLoadout(two) != null);
+                else Core.Log("[survtest] no main weapon in the save: two-primaries check skipped");
                 // 縛りの報酬（内部の表）：コモンの小型だけ = +20、全部レジェンダリー = ±0、大型なし・小型レア・ヘルメットレジェンダリー・ベストエリート = 15 ポイント
                 int Pts(bool big, Tier? bt, bool small, Tier? st, int? helmet, int? vest) => Waves.WeaponPoints(bt, big) + Waves.WeaponPoints(st, small) + Waves.ArmorPoints(helmet) + Waves.ArmorPoints(vest);
                 int max = Pts(false, null, true, Tier.Common, null, null), min = Pts(true, Tier.Legendary, true, Tier.Legendary, 4, 4), ex = Pts(false, null, true, Tier.Rare, 4, 3);

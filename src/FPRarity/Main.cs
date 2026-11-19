@@ -100,6 +100,7 @@ namespace FPRarity
 
         public override void OnSceneWasLoaded(int buildIndex, string sceneName)
         {
+            if (CoopGuard.Off) return;   // co-op では何もしない（Mod のセーブも読み書きしない）
             Tracker.OnSceneChanged();
             if (!Enabled) return;
             Mastery.OnSceneChanged();
@@ -110,7 +111,7 @@ namespace FPRarity
         {
             PerfProbe.OnUpdateStamp();
             if (TestMode.Scenario == "poiprobe") PoiProbe.Tick();
-            if (!Enabled || GameVersion.Disabled || PerfProbe.SkipModTick) return; // 無効化中は何もしない（バニラのまま）
+            if (!Enabled || GameVersion.Disabled || CoopGuard.Off || PerfProbe.SkipModTick) return; // 無効化中は何もしない（バニラのまま）
             long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
             Tick();
             PerfProbe.LastModTickMs = (System.Diagnostics.Stopwatch.GetTimestamp() - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
