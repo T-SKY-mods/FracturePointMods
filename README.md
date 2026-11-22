@@ -4,7 +4,7 @@ Unofficial fan mods for **Fracture Point** (Steam). / **Fracture Point**（Steam
 
 **[English](#english) | [日本語](#日本語)**
 
-For game Update 21 (co-op, Steam build 26773098). The mods turn themselves off in co-op. / ゲームのアップデート21（co-op、Steam ビルド 26773098）対応。co-op では MOD は自動で止まります。
+For game Update 22 (Steam build 26841316). The mods turn themselves off in co-op. / ゲームのアップデート22（Steam ビルド 26841316）対応。co-op では MOD は自動で止まります。
 
 > Not affiliated with the game's developer. Do not send bug reports from a modded game to the developer
 > (only report bugs you can reproduce without mods).

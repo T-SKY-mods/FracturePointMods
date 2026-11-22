@@ -14,7 +14,7 @@ namespace FPModOption
     public static class ReloadSound
     {
         static readonly Dictionary<(IntPtr, int), AudioClip> _cache = new();
-        const long VolumeRva = 0x452C0CC;   // OnReload が PlayOneShot に渡す音量（build 26773098。以前の 25787540 は 0x425ABA4）
+        const long VolumeRva = 0x453AA80;   // OnReload が PlayOneShot に渡す音量（build 26841316。以前の 26773098 は 0x452C0CC、25787540 は 0x425ABA4）
         static float _volume = -1f;
 
         public static (string clip, float origLen, float newLen, int sounds) LastForTest;

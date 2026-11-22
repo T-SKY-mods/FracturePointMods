@@ -13,7 +13,7 @@ namespace FPModOption
     //   係数はゲームの本体（このビルド）の定数を読む。読めない・ビルドが違うときはリロード速度を変えない
     public static class ReloadSpeed
     {
-        const long DelayFactorRva = 0x452C028;   // OnReload が使う係数（build 26773098。以前の 25787540 は 0x425AB08）
+        const long DelayFactorRva = 0x453A9DC;   // OnReload が使う係数（build 26841316。以前の 26773098 は 0x452C028、25787540 は 0x425AB08）
         static float _factor = -1f;              // -1 = まだ読んでいない、0 = 使えない
 
         static DemoWeapon _active;               // 速さを変えてリロード中の武器

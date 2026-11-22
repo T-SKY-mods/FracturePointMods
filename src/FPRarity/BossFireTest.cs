@@ -82,10 +82,13 @@ namespace FPRarity
                     for (int w = 0; w < 25 && !GameIsForeground(); w++) yield return new WaitForSeconds(0.2f);
                     FillMag(fps);
                     float hp = boss.health;
-                    Mouse(LeftDown);
+                    // 前面にないときはマウスの代わりに武器へ直接引き金を送る（テストが画面の前後に左右されないように）
+                    bool direct = !GameIsForeground();
+                    var aw = fps.GetActiveItem()?.TryCast<Il2CppDemo.Scripts.Runtime.Item.Weapon>();
+                    if (direct) { try { aw?.OnFirePressed(); } catch { } } else Mouse(LeftDown);
                     float burst = Time.time;
                     while (Time.time - burst < 0.6f && boss.health > 0f) { AimAt(fps, boss); yield return null; }
-                    Mouse(LeftUp);
+                    if (direct) { try { aw?.OnFireReleased(); } catch { } } else Mouse(LeftUp);
                     // 当たらないときの手がかり：画面の中心の先にあるもの（10 回に 1 回）
                     if (++_bursts % 10 == 0 && Camera.main is { } dc)
                     {

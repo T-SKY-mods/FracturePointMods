@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using FPModOption;
@@ -39,7 +39,8 @@ namespace FPSurvival
             ok &= SafePatcher.Patch(h, typeof(PlayerHealthManager), "Die", null, nameof(Die_Pre), null, c);
             // Die は呼び出し元に組み込まれて差し替えが効かないことがあるので、中身（非同期の本体）の方でも止める
             var dieBody = typeof(PlayerHealthManager).GetNestedTypes(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic).FirstOrDefault(t => t.Name.Contains("Die_d__"));
-            ok &= dieBody != null && SafePatcher.Patch(h, dieBody, "MoveNext", null, nameof(DieBody_Pre), null, c);
+            _dieType = dieBody; _dieThis = dieBody?.GetProperty("__4__this");
+            ok &= dieBody != null && _dieThis != null && SafePatcher.Patch(h, dieBody, "MoveNext", null, nameof(DieBody_Pre), null, c);
             ok &= SafePatcher.Patch(h, typeof(ElevatorButton), "Interact", null, nameof(Elevator_Pre), null, c);
             // 屋上を作る（レアリティmod が動いているときは、そちらのエンドレスの階の処理が Link.FloorOverride を呼ぶ）
             ok &= SafePatcher.Patch(h, typeof(LevelElevator), "SetupEndlessFloor", null, nameof(EndlessFloor_Pre), null, c);
@@ -98,12 +99,14 @@ namespace FPSurvival
             catch (Exception e) { Main.Log("[die] failed: " + e); return true; }
         }
 
+        static Type _dieType; static System.Reflection.PropertyInfo _dieThis;
         static bool DieBody_Pre(Il2CppSystem.Object __instance)
         {
             try
             {
                 if (!Arena.InSurvival) return true;
-                var phm = __instance.Cast<PlayerHealthManager._Die_d__54>().__4__this;
+                // コルーチンの型の名前（_Die_d__54 など）はビルドごとに変わるので、見つけた型から読む
+                var phm = (PlayerHealthManager)_dieThis.GetValue(Activator.CreateInstance(_dieType, __instance.Pointer));
                 return !Arena.OnDie(phm);
             }
             catch (Exception e) { Main.Log("[die] body failed: " + e); return true; }

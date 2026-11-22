@@ -17,7 +17,7 @@ namespace FPOptimize
     // 画質・操作・表示内容は変えない。差し替えに失敗した機能や、未検証のゲームバージョンでは何もしない（バニラのまま）。
     public class Main : MelonMod
     {
-        public const string TestedBuildGuid = "740d6f15fb6a4ab6bf5969a2bbea6ab8";
+        public const string TestedBuildGuid = "376d62b744084373ac30ebd93e920272";
         public static string Dir;
         static StreamWriter _log;
 
