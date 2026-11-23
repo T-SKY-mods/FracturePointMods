@@ -93,6 +93,9 @@ namespace FPCustom
             return true;
         }
 
+        // テスト用：部品を使わずに解放する・解放を戻す
+        internal static void UnlockForTest(int id, string attId, bool on = true) { var u = Get(id, true).Unlocked; if (on) { if (!u.Contains(attId)) u.Add(attId); } else u.Remove(attId); }
+
         // テスト用：解放・部屋の確認なしで装着状態を決める（null = 最初の状態に戻す、"" = 外す）
         internal static void SetForTest(int id, Cat cat, string attId)
         {

@@ -1,4 +1,4 @@
-﻿FPCustom Mod - 使用している3Dモデル（すべて Sketchfab の無料モデル、ライセンス: Creative Commons Attribution 4.0 / CC BY 4.0）
+﻿FPCustom Mod - 使用している3Dモデル（1〜7 は Sketchfab の無料モデル、ライセンス: Creative Commons Attribution 4.0 / CC BY 4.0。8 は下の説明のとおり）
 https://creativecommons.org/licenses/by/4.0/
 
 1. "low-poly AK-74M Zenitco" by D_U (@DU1701)（B-10 ハンドガード＋B-19 のみ使用）
@@ -21,6 +21,9 @@ https://creativecommons.org/licenses/by/4.0/
 
 7. "Retro VP70 Pistol" by void22（ストックの部分のみ使用。形を手直し）
    https://sketchfab.com/3d-models/retro-vp70-pistol-04f5ef2c35c64f79ba64733310138586
+
+8. メイン武器のストック（MCX 折りたたみ・PRS・SBA3・MOE）: "Low Poly Modular Weapon Bundle - Pack Alpha" by KK Models
+   Unity Asset Store の有料アセット（標準 Unity Asset Store EULA）。MOD の DLL に組み込んでいて、モデルのファイルとしては配布していません（このモデルは CC BY ではありません）
 
 ハンドガンの折りたたみストック（93R 型）・木製ストック・ワイヤーストック・VP70 ストックの取り付け金具と、ハンドガンのアローヘッドブレーキ・リニアコンペンセイター・フラッシュハイダーは Mod の作者が作った形です（上のモデルは使っていません）。
 Mod 内では、ゲームに合わせて大きさ・位置・向き・色の調整、部品の切り出し、テクスチャの縮小などの改変を行っています。

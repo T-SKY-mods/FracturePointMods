@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using FPModOption;
 using UnityEngine;
@@ -241,6 +241,46 @@ namespace FPCustom
             }
             var b = Ballistic(inst)?.PhysicalBulletSpawnPoint; var pb = Ballistic(prefab)?.PhysicalBulletSpawnPoint;
             if (b != null && pb != null) { b.localPosition = pb.localPosition; b.localRotation = pb.localRotation; }
+        }
+
+        // シールド RMS（ACE-31 のサイト）の照準の模様を、丸と点からただの赤い点に（最初から付いている ACE-31 も、ほかの銃に載せたものも）
+        const string RmsMat = "Reflex Sight 5";
+        static Material _rmsDot; static Texture2D _dotTex;
+        public static void RedDot(GameObject inst)
+        {
+            foreach (var r in inst.GetComponentsInChildren<MeshRenderer>(true))
+            {
+                var m = r.sharedMaterial;
+                if (m == null || m == _rmsDot || !m.name.StartsWith(RmsMat) || !m.HasProperty("_RedDotTex")) continue;
+                if (_rmsDot == null)
+                {
+                    _rmsDot = new Material(m) { name = RmsMat + " dot", hideFlags = HideFlags.DontUnloadUnusedAsset };
+                    _rmsDot.SetTexture("_RedDotTex", DotTex());
+                    _rmsDot.SetColor("_RedDotColor", new Color(1f, 0.08f, 0.05f, 1f));
+                    _rmsDot.SetFloat("_UseTextureColor", 0f);
+                }
+                r.sharedMaterial = _rmsDot;
+            }
+        }
+        public static float DotRadius = 0.045f;   // 模様の画像の幅に対する点の半径（構えたときハンドガンのドットサイトの点と同じ大きさ）
+        static Texture2D DotTex()
+        {
+            if (_dotTex != null) return _dotTex;
+            const int N = 256;
+            var tex = new Texture2D(N, N, TextureFormat.RGBA32, true) { name = "fpc_red_dot", wrapMode = TextureWrapMode.Clamp };
+            var px = new Color[N * N];
+            float rad = DotRadius * N, soft = 2f;
+            for (int y = 0; y < N; y++)
+                for (int x = 0; x < N; x++)
+                {
+                    float d = Mathf.Sqrt((x + 0.5f - N / 2f) * (x + 0.5f - N / 2f) + (y + 0.5f - N / 2f) * (y + 0.5f - N / 2f));
+                    float a = Mathf.Clamp01((rad - d) / soft + 0.5f);
+                    px[y * N + x] = new Color(a, a, a, a);
+                }
+            tex.SetPixels(px); tex.Apply(true, false);
+            tex.hideFlags = HideFlags.DontUnloadUnusedAsset;
+            _dotTex = tex;
+            return tex;
         }
 
         public static Vector3 LastReticle, LastAim;   // テスト用（武器の根元の座標）

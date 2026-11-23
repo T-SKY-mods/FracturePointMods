@@ -41,12 +41,15 @@ namespace FPCustom
         public static void HookTooltip() => Link.CustomPageOpen = () => IsOpen;
 
         static RawImage _view;
-        static TMP_Text _name, _parts, _status, _effHead, _effPlus, _effMinus, _eqHead, _eqPlus, _eqMinus;
-        const int Rows = 5;
-        static readonly TMP_Text[] _cat = new TMP_Text[Rows], _option = new TMP_Text[Rows];
-        static readonly UiItemParams[] _prev = new UiItemParams[Rows], _next = new UiItemParams[Rows], _act = new UiItemParams[Rows];
-        static readonly int[] _browse = new int[Rows];   // 各行で今見ている選択肢（0 = なし）
-        static int _lastRow = -1;                         // 最後に ◀ ▶ を押した行（効果の欄に出す部品）
+        static TMP_Text _name, _parts, _status, _effHead, _effPlus, _effMinus, _eqHead, _eqPlus, _eqMinus, _optHead, _slotHead;
+        // 部位（左の一覧）。メイン武器は 6（マズル・グリップ・サイト・サイドレール・ストック・マガジン）、ハンドガンは 5
+        const int Rows = 6;
+        // 選んだ部位に付けられる部品（右の一覧）。いちばん多い部位でも「なし」＋ 7 まで
+        const int MaxOpts = 8;
+        static readonly UiItemParams[] _slot = new UiItemParams[Rows], _opt = new UiItemParams[MaxOpts];
+        static UiItemParams _actBtn;
+        static readonly int[] _browse = new int[Rows];   // 各部位で今見ている選択肢（0 = なし）
+        static int _lastRow = -1;                         // 選んでいる部位
         static UiItemParams _toMastery, _masteryCustomTab;
 
         public static void OnSceneChanged() { _bag = null; _openButton = null; _page = null; _listContent = null; _cards.Clear(); _selected = -1; _built.Clear(); }
@@ -219,49 +222,59 @@ namespace FPCustom
             _view = view.gameObject.AddComponent<RawImage>();
             _view.texture = Preview.Texture;
 
-            // 部品の行：カテゴリ ◀ 部品名 ▶ [解放 / 装着 / 外す]（行を詰めて、下の効果の欄を広く取る）
+            // 左：部位の一覧（部位の名前と、今付けている部品）。押すと右にその部位の部品が並ぶ
             for (int i = 0; i < Rows; i++)
             {
-                float y = 266 + i * 54;
-                var line = new GameObject("Line").AddComponent<RectTransform>();
-                Place(line, p, new Vector2(40, y + 51), new Vector2(745, 2));
-                line.gameObject.AddComponent<Image>().color = new Color(1f, 1f, 1f, 0.12f);
-                _cat[i] = TopText(title, p, new Vector2(40, y + 7), new Vector2(150, 40), 26);
                 int row = i;
-                _prev[i] = NewButton(p, "◀", Vector2.zero, new Vector2(56, 46), 24);
-                Place(_prev[i].GetComponent<RectTransform>(), p, new Vector2(195, y + 2), new Vector2(56, 46));
-                _prev[i].Button.onClick.AddListener(new Action(() => Safe("prev", () => Browse(row, -1))));
-                _option[i] = TopText(title, p, new Vector2(254, y + 9), new Vector2(292, 40), 24);
-                _option[i].alignment = TextAlignmentOptions.Top;
-                _option[i].enableAutoSizing = true; _option[i].fontSizeMin = 18; _option[i].fontSizeMax = 24;
-                _next[i] = NewButton(p, "▶", Vector2.zero, new Vector2(56, 46), 24);
-                Place(_next[i].GetComponent<RectTransform>(), p, new Vector2(549, y + 2), new Vector2(56, 46));
-                _next[i].Button.onClick.AddListener(new Action(() => Safe("next", () => Browse(row, +1))));
-                _act[i] = NewButton(p, "", Vector2.zero, new Vector2(175, 46), 22);
-                Place(_act[i].GetComponent<RectTransform>(), p, new Vector2(610, y + 2), new Vector2(175, 46));
-                _act[i].Button.onClick.AddListener(new Action(() => Safe("act", () => Act(row))));
+                _slot[i] = NewButton(p, "", Vector2.zero, new Vector2(330, 36), 21);
+                Place(_slot[i].GetComponent<RectTransform>(), p, new Vector2(40, 290 + i * 40), new Vector2(330, 36));
+                var t = _slot[i].texts[0];
+                t.alignment = TextAlignmentOptions.MidlineLeft;
+                t.rectTransform.offsetMin = new Vector2(14, 0); t.rectTransform.offsetMax = new Vector2(-10, 0);
+                t.enableAutoSizing = true; t.fontSizeMin = 18; t.fontSizeMax = 21;
+                _slot[i].Button.onClick.AddListener(new Action(() => Safe("slot", () => SelectRow(row))));
+            }
+            // 右：選んだ部位の部品（名前と状態：装着中・解放済み・未解放）。押すと下に効果が出る
+            _optHead = TopText(help, p, new Vector2(385, 260), new Vector2(400, 28), 20);
+            _slotHead = TopText(help, p, new Vector2(40, 260), new Vector2(330, 28), 20);
+            for (int i = 0; i < MaxOpts; i++)
+            {
+                int k = i;
+                _opt[i] = NewButton(p, "", Vector2.zero, new Vector2(400, 28), 20);
+                Place(_opt[i].GetComponent<RectTransform>(), p, new Vector2(385, 290 + i * 30), new Vector2(400, 28));
+                var t = _opt[i].texts[0];
+                t.alignment = TextAlignmentOptions.MidlineLeft;
+                t.rectTransform.offsetMin = new Vector2(14, 0); t.rectTransform.offsetMax = new Vector2(-12, 0);
+                t.enableAutoSizing = true; t.fontSizeMin = 18; t.fontSizeMax = 20;
+                _opt[i].Button.onClick.AddListener(new Action(() => Safe("opt", () => Pick(k))));
             }
 
-            // 効果は 2 段：上＝選んでいるアタッチメント、下＝付けているアタッチメントすべて（数値は合計、数値にならない効果はすべて）。
+            // 効果は 2 段：上＝選んでいる部品（右に [解放 / 装着 / 外す]）、下＝付けている部品すべて（数値は合計、数値にならない効果はすべて）。
             // どちらも左＝プラスの効果、右＝マイナスの効果。効果が多いときだけ少し小さく（小さくても読める 18 まで）
-            _effHead = TopText(help, p, new Vector2(40, 544), new Vector2(745, 32), 24);
-            _effPlus = TopText(help, p, new Vector2(40, 578), new Vector2(360, 120), 22);
-            _effMinus = TopText(help, p, new Vector2(425, 578), new Vector2(360, 120), 22);
-            _eqHead = TopText(help, p, new Vector2(40, 710), new Vector2(745, 30), 22);
-            _eqPlus = TopText(help, p, new Vector2(40, 744), new Vector2(360, 186), 22);
-            _eqMinus = TopText(help, p, new Vector2(425, 744), new Vector2(360, 186), 22);
+            _effHead = TopText(help, p, new Vector2(40, 536), new Vector2(555, 32), 24);
+            _actBtn = NewButton(p, "", Vector2.zero, new Vector2(180, 46), 22);
+            Place(_actBtn.GetComponent<RectTransform>(), p, new Vector2(605, 533), new Vector2(180, 40));
+            _actBtn.Button.onClick.AddListener(new Action(() => Safe("act", () => Act(_lastRow))));
+            _effPlus = TopText(help, p, new Vector2(40, 576), new Vector2(360, 100), 22);
+            _effMinus = TopText(help, p, new Vector2(425, 576), new Vector2(360, 100), 22);
+            _eqHead = TopText(help, p, new Vector2(40, 684), new Vector2(745, 30), 22);
+            _eqPlus = TopText(help, p, new Vector2(40, 716), new Vector2(360, 216), 22);
+            _eqMinus = TopText(help, p, new Vector2(425, 716), new Vector2(360, 216), 22);
             // 日本語の字体は行の間が広いので詰める
             foreach (var t in new[] { _effPlus, _effMinus, _eqPlus, _eqMinus }) { t.enableAutoSizing = true; t.fontSizeMin = 18; t.fontSizeMax = 22; t.lineSpacing = -22f; }
-            foreach (var t in new[] { _effHead, _eqHead }) { t.enableAutoSizing = true; t.fontSizeMin = 18; t.fontSizeMax = t.fontSize; }
-            foreach (var (y, h) in new[] { (580f, 116f), (746f, 182f) })
+            foreach (var t in new[] { _effHead, _eqHead, _optHead, _slotHead }) { t.enableAutoSizing = true; t.fontSizeMin = 18; t.fontSizeMax = t.fontSize; }
+            foreach (var (y, h) in new[] { (578f, 96f), (718f, 212f) })
             {
                 var sep = new GameObject("Sep").AddComponent<RectTransform>();
                 Place(sep, p, new Vector2(410, y), new Vector2(2, h));
                 sep.gameObject.AddComponent<Image>().color = new Color(1f, 1f, 1f, 0.12f);
             }
-            var eqSep = new GameObject("SepEquipped").AddComponent<RectTransform>();
-            Place(eqSep, p, new Vector2(40, 704), new Vector2(745, 1));
-            eqSep.gameObject.AddComponent<Image>().color = new Color(1f, 1f, 1f, 0.12f);
+            foreach (var y in new[] { 530f, 680f })
+            {
+                var line = new GameObject("Line").AddComponent<RectTransform>();
+                Place(line, p, new Vector2(40, y), new Vector2(745, 1));
+                line.gameObject.AddComponent<Image>().color = new Color(1f, 1f, 1f, 0.12f);
+            }
         }
 
         // ---------- 操作 ----------
@@ -297,6 +310,20 @@ namespace FPCustom
             var n = Options(row).Count;
             _browse[row] = ((_browse[row] + d) % n + n) % n;
             _lastRow = row;
+            RefreshDetails();
+        }
+
+        static void SelectRow(int row)
+        {
+            if (_selected < 0 || row >= Catalog.CatsFor(_selected).Length) return;
+            _lastRow = row;
+            RefreshDetails();
+        }
+
+        static void Pick(int k)
+        {
+            if (_lastRow < 0 || k >= Options(_lastRow).Count) return;
+            _browse[_lastRow] = k;
             RefreshDetails();
         }
 
@@ -346,27 +373,49 @@ namespace FPCustom
 
             bool canEdit = Store.CanEdit;
             var cats = Catalog.CatsFor(_selected);
-            Att browsed = null;
+            if (_lastRow < 0 || _lastRow >= cats.Length) _lastRow = 0;
             for (int i = 0; i < Rows; i++)
             {
-                var cat = cats[i];
-                var opts = Options(i);
-                var a = opts[_browse[i]];
-                var eq = Store.Equipped(_selected, cat);
-                _cat[i].text = Catalog.CatName(cat, Ja);
-                // 付けている部品は金色、まだ解放していない部品は灰色
-                string name = a == null ? T("なし", "None") : a.Name(Ja);
-                _option[i].text = a != null && eq == a ? $"<color=#FFD966>{name}</color>" : a != null && !Store.Unlocked(_selected, a) ? $"<color=#AAAAAA>{name}</color>" : name;
+                bool shown = i < cats.Length;
+                _slot[i].gameObject.SetActive(shown);
+                if (!shown) continue;
+                var eq = Store.Equipped(_selected, cats[i]);
+                string eqName = eq == null ? $"<color=#AAAAAA>{T("なし", "None")}</color>" : eq.Name(Ja);
+                bool sel = i == _lastRow;
+                _slot[i].texts[0].text = $"<size=85%>{Catalog.CatName(cats[i], Ja)}</size><pos=32%>{eqName}";
+                if (_slot[i].Background != null) _slot[i].Background.color = sel ? Gold : Color.white;
+                _slot[i].texts[0].color = sel ? Gold : Color.white;
+            }
+            var rowCat = cats[_lastRow];
+            var opts = Options(_lastRow);
+            var rowEq = Store.Equipped(_selected, rowCat);
+            if (_browse[_lastRow] >= opts.Count) _browse[_lastRow] = 0;
+            _slotHead.text = $"<color=#AAAAAA>{T("部位", "Slot")}</color>";
+            _optHead.text = $"<color=#AAAAAA>{Catalog.CatName(rowCat, Ja)}  {opts.Count(o => o != null)}{T("種類", " parts")}</color>";
+            for (int k = 0; k < MaxOpts; k++)
+            {
+                bool shown = k < opts.Count;
+                _opt[k].gameObject.SetActive(shown);
+                if (!shown) continue;
+                var o = opts[k];
+                bool isEq = o == null ? rowEq == null : rowEq == o;
+                bool locked = o != null && !Store.Unlocked(_selected, o);
+                string nm = o == null ? T("なし", "None") : o.Name(Ja);
+                string state = isEq ? T("装着中", "Equipped") : o == null ? "" : locked ? T($"未解放 {Store.UnlockCost}", $"Locked {Store.UnlockCost}") : T("解放済み", "Unlocked");
+                string col = isEq ? "#FFD966" : locked ? "#AAAAAA" : "#FFFFFF";
+                _opt[k].texts[0].text = $"<color={col}>{nm}</color><pos=70%><size=85%><color={col}>{state}</color></size>";
+                bool sel = k == _browse[_lastRow];
+                if (_opt[k].Background != null) _opt[k].Background.color = sel ? Gold : new Color(1f, 1f, 1f, 0.5f);
+            }
+            Att browsed = opts[_browse[_lastRow]];
+            {
                 string label; bool on;
-                if (a == null) { label = T("外す", "REMOVE"); on = eq != null; }
-                else if (!Store.Unlocked(_selected, a)) { label = T($"解放 ({Store.UnlockCost})", $"UNLOCK ({Store.UnlockCost})"); on = have >= Store.UnlockCost; }
-                else if (eq == a) { bool rm = Catalog.CanRemove(_selected, cat); label = rm ? T("外す", "REMOVE") : T("装着中", "EQUIPPED"); on = rm; }
+                if (browsed == null) { label = T("外す", "REMOVE"); on = rowEq != null && Catalog.CanRemove(_selected, rowCat); }
+                else if (!Store.Unlocked(_selected, browsed)) { label = T($"解放 {Store.UnlockCost}個", $"UNLOCK {Store.UnlockCost}"); on = have >= Store.UnlockCost; }
+                else if (rowEq == browsed) { bool rm = Catalog.CanRemove(_selected, rowCat); label = rm ? T("外す", "REMOVE") : T("装着中", "EQUIPPED"); on = rm; }
                 else { label = T("装着", "ATTACH"); on = true; }
-                if (_act[i].texts != null && _act[i].texts.Length > 0) _act[i].texts[0].text = label;
-                SetEnabled(_act[i], canEdit && on);
-                SetEnabled(_prev[i], opts.Count > 1);
-                SetEnabled(_next[i], opts.Count > 1);
-                if (i == _lastRow) browsed = a;
+                _actBtn.texts[0].text = label;
+                SetEnabled(_actBtn, canEdit && on);
             }
             // 上：選んでいるアタッチメントのプラス（左）・マイナス（右）を 1 行に 1 つ
             var eqSel = browsed != null && Store.Equipped(_selected, browsed.Cat) == browsed;
@@ -534,9 +583,16 @@ namespace FPCustom
         public static string EffectsForTest => $"head='{_effHead?.GetParsedText()}' plus='{_effPlus?.GetParsedText()}' minus='{_effMinus?.GetParsedText()}' sum='{_eqHead?.GetParsedText()}' eqplus='{_eqPlus?.GetParsedText()}' eqminus='{_eqMinus?.GetParsedText()}'";
         public static void BrowseForTest(int row, int d) => Browse(row, d);
         public static void BrowseToForTest(int row, string attId) { var o = Options(row); int i = o.FindIndex(a => a?.Id == attId); if (i >= 0) { _browse[row] = i; _lastRow = row; RefreshDetails(); } else Main.Log($"[ui] test browse: {attId} not in row {row} ({string.Join(",", o.Select(a => a?.Id ?? "none"))})"); }
-        public static void ClickActForTest(int row) => _act[row]?.Button.onClick.Invoke();
+        public static void ClickActForTest(int row) { _lastRow = row; RefreshDetails(); _actBtn?.Button.onClick.Invoke(); }
         public static void ClickToMasteryForTest() => Show(false, toMastery: true);
-        public static string RowForTest(int row) => $"cat='{_cat[row]?.text}' option='{_option[row]?.text}' act='{_act[row]?.texts?[0]?.text}' enabled={_act[row]?.Button.interactable}";
+        public static string RowForTest(int row)
+        {
+            int keep = _lastRow; _lastRow = row; RefreshDetails();
+            var o = Options(row); var a = o[Math.Min(_browse[row], o.Count - 1)];
+            var r = $"cat='{Catalog.CatName(Catalog.CatsFor(_selected)[row], Ja)}' slot='{_slot[row]?.texts?[0]?.text}' option='{(a == null ? T("なし", "None") : a.Name(Ja))}' act='{_actBtn?.texts?[0]?.text}' enabled={_actBtn?.Button.interactable}";
+            _lastRow = keep; RefreshDetails();
+            return r;
+        }
         public static string PartsTextForTest => _parts?.text;
         public static IEnumerable<int> CardIdsForTest => _cards.Select(c => c.id).ToList();
         public static bool BuiltJapaneseForTest => _builtJa;

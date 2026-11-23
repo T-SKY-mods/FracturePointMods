@@ -88,6 +88,14 @@ namespace FPSurvival
         // 案内の四隅（ワールド座標）。ゲーム側の配列で受け取る（C# の配列を渡すと写しに書かれて値が戻らない）
         static Vector3[] Corners(TMP_Text text)
         {
+            // 字が描かれている所だけ（枠は見出しと同じ高さで下に長く、エンドレスmod の「調整」に重なる）
+            var tb = text.textBounds;
+            if (tb.size.x > 0f && tb.size.y > 0f)
+            {
+                var rt = text.rectTransform;
+                return new[] { rt.TransformPoint(new Vector3(tb.min.x, tb.min.y, 0f)), rt.TransformPoint(new Vector3(tb.min.x, tb.max.y, 0f)),
+                               rt.TransformPoint(new Vector3(tb.max.x, tb.max.y, 0f)), rt.TransformPoint(new Vector3(tb.max.x, tb.min.y, 0f)) };
+            }
             var arr = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<Vector3>(4);
             text.rectTransform.GetWorldCorners(arr);
             return new[] { arr[0], arr[1], arr[2], arr[3] };

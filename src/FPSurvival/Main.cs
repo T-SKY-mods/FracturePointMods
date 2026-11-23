@@ -31,6 +31,9 @@ namespace FPSurvival
                 if (!Settings.Enabled("FPSurvival")) { Log("[init] turned off in the MOD tab: survival mode OFF (records kept)"); return; }
                 if (!Patches.Install(HarmonyInstance)) { Log("[init] patches failed: survival mode OFF"); HarmonyInstance.UnpatchSelf(); return; }
                 Stash.Load();
+                // エンドレス調整mod：サバイバルのページ・サバイバル中は調整を出さない・効かせない
+                Link.SurvivalTabletPage = () => Tablet.Page;
+                Link.SurvivalBusy = () => Survival.Bypass || Stash.InRun;
                 SurvivalTest.Register();
                 LegStat.Register();
                 SurvivalProbe.Register();

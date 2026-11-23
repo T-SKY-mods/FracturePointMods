@@ -30,7 +30,22 @@ namespace FPModOption
             return Path.Combine(Dir, relPath);
         }
 
-        public static bool Exists(string relPath) => File.Exists(Resolve(relPath));
+        public static bool Exists(string relPath) => File.Exists(Resolve(relPath)) || _packed.ContainsKey(Key(relPath));
+
+        // ---------- メモリの中だけにある模型（暗号化して DLL に入れた物。ファイルとしては置かない） ----------
+        //   キー：models からの相対パス（区切りは /、小文字）。フルパスで渡されても最後の "models/" の後ろで見る
+        static readonly Dictionary<string, byte[]> _packed = new();
+        public static void AddPacked(string relPath, byte[] data) => _packed[Key(relPath)] = data;
+        public static int PackedCount => _packed.Count;
+        static string Key(string path)
+        {
+            var k = path.Replace('\\', '/').ToLowerInvariant();
+            int i = k.LastIndexOf("/models/", StringComparison.Ordinal);
+            return i >= 0 ? k.Substring(i + 8) : k.TrimStart('/');
+        }
+        public static bool FileExists(string path) => _packed.ContainsKey(Key(path)) || File.Exists(path);
+        public static byte[] ReadBytes(string path) => _packed.TryGetValue(Key(path), out var b) ? b : File.ReadAllBytes(path);
+        static string ReadText(string path) => _packed.TryGetValue(Key(path), out var b) ? System.Text.Encoding.UTF8.GetString(b) : File.ReadAllText(path);
 
         public class Model
         {
@@ -52,7 +67,7 @@ namespace FPModOption
         {
             if (_meshes.TryGetValue(relPath, out var cached) && cached != null) return cached;
             var path = Resolve(relPath);
-            using var br = new BinaryReader(File.OpenRead(path));
+            using var br = new BinaryReader(new MemoryStream(ReadBytes(path)));
             if (new string(br.ReadChars(4)) != "FPM1") throw new InvalidDataException("not FPM1: " + relPath);
             int n = br.ReadInt32(), flags = br.ReadInt32(), subCount = br.ReadInt32();
             var counts = new int[subCount];
@@ -112,7 +127,7 @@ namespace FPModOption
         {
             if (_models.TryGetValue(name, out var m) && m.Mesh != null) return m;
             var dir = Resolve(name);
-            var json = JsonSerializer.Deserialize<ModelJson>(File.ReadAllText(Path.Combine(dir, "model.json")));
+            var json = JsonSerializer.Deserialize<ModelJson>(ReadText(Path.Combine(dir, "model.json")));
             var mesh = LoadMesh(Path.Combine(name, "model.fpm"));
             var mats = new Material[json.materials.Length];
             var names = new string[mats.Length];
@@ -210,9 +225,9 @@ namespace FPModOption
             if (string.IsNullOrEmpty(file)) return null;
             var path = Path.Combine(dir, file);
             if (_textures.TryGetValue(path, out var t) && t != null) return t;
-            if (!File.Exists(path)) { Core.Log("[model] texture missing " + path); return null; }
+            if (!FileExists(path)) { Core.Log("[model] texture missing " + path); return null; }
             t = new Texture2D(2, 2, TextureFormat.RGBA32, true, linear) { name = "FPR_" + file, wrapMode = TextureWrapMode.Repeat, anisoLevel = 4 };
-            ImageConversion.LoadImage(t, File.ReadAllBytes(path), false);
+            ImageConversion.LoadImage(t, ReadBytes(path), false);
             t.hideFlags = HideFlags.DontUnloadUnusedAsset;
             _textures[path] = t;
             return t;

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using FPModOption;
@@ -138,7 +138,7 @@ namespace FPCustom
                 Effects.SyncMags();
                 mag.AmmoCount = mag.MaxAmmoCount;
                 _slot = inv.MagStored.IndexOf(mag);
-                Check("loading speed: only the in-run load button is slowed", Effects.LoadPatchesForTest == 1);
+                Check("loading speed: in-run load button hook installed", Effects.LoadPatchesForTest == 1);
                 Check("save hooks and hit hook installed", Effects.SavePatched && Effects.HitPatched);
                 // セーブ：ファイルには元の大きさで書き、余った弾は Mod 側に覚える
                 UnityEngine.Object.FindObjectOfType<Il2Cpp.SavesManager>()?.Save();

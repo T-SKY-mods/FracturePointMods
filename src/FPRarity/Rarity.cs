@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using UnityEngine;
 
 using FPModOption;
@@ -103,6 +103,7 @@ namespace FPRarity
 
         // 出現重み（Common → Legendary）。深い階層ほど高レアが出やすくなる（10階で頭打ち）
         //   1階: 40/30/18/9/3   10階: 15/30/28/17/10
+        public static float[] WeightsForTest(int floor) => WeightsForFloor(floor);
         static float[] WeightsForFloor(int floor)
         {
             float luck = Math.Clamp(floor - 1, 0, 9) * (10f / 9f);
@@ -355,7 +356,8 @@ namespace FPRarity
         public static Color ColorOf(Tier t) => Colors[(int)t];
         public static string Hex(Tier t) => ColorUtility.ToHtmlStringRGB(Colors[(int)t]);
 
-        static Tier PickTier() => PickTier(CurrentFloor(), Tier.Common);
+        // ふつうの武器の抽選。エンドレス調整mod で調整したランの間は運（Link.Luck）でレアリティを上げる
+        static Tier PickTier() => PickTierFor(CurrentFloor(), Link.Luck());
 
         // floor の階の出現率で抽選し、min より低ければ min にする（FPSurvival の武器箱）
         public static Tier PickTier(int floor, Tier min)
@@ -364,9 +366,17 @@ namespace FPRarity
             return t < min ? min : t;
         }
 
-        static Tier PickTierFor(int floor)
+        // 運：レアリティ t（0 Common 〜 4 Legendary）の重みに 運^(0.5t) を掛ける（運 1 ならそのまま）
+        public static float[] WeightsWithLuck(int floor, float luck)
         {
-            var weights = WeightsForFloor(floor);
+            var w = WeightsForFloor(floor);
+            if (luck > 1.001f) for (int t = 0; t < w.Length; t++) w[t] *= MathF.Pow(luck, t * 0.5f);   // エンドレス調整mod の Tuning.TiltPower と同じ
+            return w;
+        }
+
+        static Tier PickTierFor(int floor, float luck = 1f)
+        {
+            var weights = WeightsWithLuck(floor, luck);
             float total = 0;
             foreach (var w in weights) total += w;
             float r = (float)Rng.NextDouble() * total;

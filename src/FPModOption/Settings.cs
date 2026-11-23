@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -42,6 +42,9 @@ namespace FPModOption
             new() { Id = "FPSurvival", NameJa = "サバイバルモードmod", NameEn = "Survival mode mod",
                     DescJa = "エンドレス端末から、屋上で敵のウェーブを倒し続けるサバイバルモードを遊べる。途中でやめた回の預かり品は、オフにしても消えず、オンに戻して拠点に入ると返る。",
                     DescEn = "Play survival from the endless terminal: fight waves of enemies on the rooftop. Items kept from an unfinished run are not lost when turned off: turn it on and enter your room to get them back." },
+            new() { Id = "FPEndless", NameJa = "エンドレス調節mod", NameEn = "Endless tuning mod",
+                    DescJa = "エンドレス端末に調節を追加する。敵の強さ・数・体力を上げるほど、武器と戦利品のレアリティが上がり、参加費も高くなる。",
+                    DescEn = "Adds tuning to the endless terminal. The stronger, more numerous and tougher the enemies, the higher the rarity of weapons and loot, and the higher the entry fee." },
             new() { Id = "FPHitMarker", OffAtFirst = true, NameJa = "ヒットマーカーmod", NameEn = "Hit marker mod",
                     DescJa = "敵に弾が当たると、画面の中央に印を出す。頭は二重、倒すと赤、ダメージが減る腕や手は青。",
                     DescEn = "Shows a marker in the middle of the screen when your bullets hit an enemy. Double for headshots, red for kills, blue for arms and hands that take less damage." },

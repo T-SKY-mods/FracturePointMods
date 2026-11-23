@@ -180,7 +180,7 @@ namespace FPCustom
                 Check("customize page open, mastery page closed", CustomUi.IsOpen && !(Link.MasteryOpen?.Invoke() ?? false));
                 Check($"29 weapons listed (all but the RPG) ({CustomUi.CardCount})", CustomUi.CardCount == 29);
                 CustomUi.SelectForTest(_rifle);
-                for (int r = 0; r < 5; r++) Core.Log($"[test] AK-12 row {r}: {CustomUi.RowForTest(r)}");
+                for (int r = 0; r < Catalog.CatsFor(_rifle).Length; r++) Core.Log($"[test] AK-12 row {r}: {CustomUi.RowForTest(r)}");
                 Shot("cust_1_ak12");
             }));
             s.Add(("remove factory grip", () =>
@@ -190,6 +190,28 @@ namespace FPCustom
                 Check($"factory grip removed, no parts used ({Store.Describe(_rifle)}, parts {Parts.Count()})", Store.Equipped(_rifle, Cat.Grip) == null && Parts.Count() == _partsBefore + Given);
                 CustomUi.ClickActForTest(1);
                 Check("and attached again", Store.Equipped(_rifle, Cat.Grip)?.Id == "vertical_grip");
+            }));
+            s.Add(("rifle stock on AK-12", () =>
+            {
+                CustomUi.SelectForTest(_rifle);
+                int row = Array.IndexOf(Catalog.CatsFor(_rifle), Cat.Stock);
+                Check($"AK-12 has a stock row with the 4 stocks (row {row}: {string.Join(",", Catalog.For(_rifle, Cat.Stock).Select(a => a.Id))})", row == 4 && Catalog.For(_rifle, Cat.Stock).Count == 4);
+                Check("AKMS / Hunter-12 / Beater have no stock row", new[] { 4, 19, 29 }.All(i => !Catalog.CatsFor(i).Contains(Cat.Stock)));
+                Store.UnlockForTest(_rifle, "stock_prs");
+                CustomUi.BrowseToForTest(row, "stock_prs");
+                CustomUi.ClickActForTest(row);
+                Core.Log($"[test] AK-12 stock: {CustomUi.RowForTest(row)} / {CustomUi.EffectsForTest.Replace("\n", " / ")}");
+                Check($"PRS stock attached ({Store.Describe(_rifle)})", Store.Equipped(_rifle, Cat.Stock)?.Id == "stock_prs");
+                var bad = CustomUi.LayoutProblemsForTest(18f);
+                Check($"6-row layout fits ({bad})", bad.Length == 0);
+            }));
+            Wait(s);
+            s.Add(("rifle stock shot", () =>
+            {
+                Shot("cust_1b_ak12_stock");
+                Preview.Save(Path.Combine(ShotDir, "cust_1b_ak12_stock_view.png"));
+                Store.SetForTest(_rifle, Cat.Stock, null);
+                Store.UnlockForTest(_rifle, "stock_prs", false);
             }));
             s.Add(("unlock + attach on AKMS", () =>
             {
@@ -233,7 +255,7 @@ namespace FPCustom
             s.Add(("pistol", () =>
             {
                 CustomUi.SelectForTest(_pistol);
-                for (int r = 0; r < 5; r++) Core.Log($"[test] SP-320 row {r}: {CustomUi.RowForTest(r)}");
+                for (int r = 0; r < Catalog.CatsFor(_pistol).Length; r++) Core.Log($"[test] SP-320 row {r}: {CustomUi.RowForTest(r)}");
                 Check($"SP-320 rows are pistol categories with its dot sight and laser ({Store.Describe(_pistol)})",
                       CustomUi.RowForTest(1).Contains(Catalog.CatName(Cat.Stock, Core.Ja)) && Store.Equipped(_pistol, Cat.Sight)?.Id == "p_dot" && Store.Equipped(_pistol, Cat.SideRail)?.Id == "p_laser");
                 Shot("cust_3_sp320");

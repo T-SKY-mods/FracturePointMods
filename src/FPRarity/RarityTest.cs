@@ -107,8 +107,51 @@ namespace FPRarity
             S["perffight"] = () => PerfProbe.Steps(boss: true, fight: true);
             // 本当の撃ち合い：敵は倒れる（ダメージそのまま）・敵も撃ち返す。プレイヤーだけ無敵
             S["perfreal"] = () => { PerfProbe.Real = true; return PerfProbe.Steps(boss: true, fight: true); };
+            // エンドレス調整（強さ x4・数 x2・体力 x2）を入れた撃ち合い（FPEndless の設定はテストの後に元へ戻る）
+            S["perfreal_normal"] = () =>
+            {
+                PerfProbe.Real = true;
+                var s = PerfProbe.Steps(boss: true, fight: true);
+                s.Insert(0, ("tuning off", () => Type.GetType("FPEndless.Tuning, FPEndless")?.GetMethod("SetForTest")?.Invoke(null, new object[] { false, 1f, 1f, 1f })));
+                return s;
+            };
+            S["perfreal_tuned"] = () =>
+            {
+                PerfProbe.Real = true;
+                var s = PerfProbe.Steps(boss: true, fight: true);
+                s.Insert(0, ("tuning x4/x2/x2", () =>
+                {
+                    Type.GetType("FPEndless.Tuning, FPEndless")?.GetMethod("SetForTest")?.Invoke(null, new object[] { true, 4f, 2f, 2f });
+                    if (Refs.Inv != null) Refs.Inv.DollarsCount = 60000f;
+                }));
+                return s;
+            };
+            S["killprobe"] = () =>
+            {
+                PerfProbe.KillProbe = true; PerfProbe.Real = true;
+                var s = PerfProbe.Steps(boss: true, fight: true);
+                s.Insert(0, ("tuning x4/x2/x2", () =>
+                {
+                    Type.GetType("FPEndless.Tuning, FPEndless")?.GetMethod("SetForTest")?.Invoke(null, new object[] { true, 4f, 2f, 2f });
+                    if (Refs.Inv != null) Refs.Inv.DollarsCount = 60000f;
+                }));
+                return s;
+            };
+            // 調整の撃ち合いの中で、ゲームの部品を 1 つずつ止めて差を見る（FPS 低下の原因を探す）
+            S["perfreal_tunedab"] = () =>
+            {
+                PerfProbe.Real = true; PerfProbe.RealToggles = true;
+                var s = PerfProbe.Steps(boss: true, fight: true);
+                s.Insert(0, ("tuning x4/x2/x2", () =>
+                {
+                    Type.GetType("FPEndless.Tuning, FPEndless")?.GetMethod("SetForTest")?.Invoke(null, new object[] { true, 4f, 2f, 2f });
+                    if (Refs.Inv != null) Refs.Inv.DollarsCount = 60000f;
+                }));
+                return s;
+            };
             // 跳弾の重さ：5 秒ごとに跳弾あり/なし（なしは測定のためだけ）を切り替えて、弾の処理の時間と当たりの数を比べる
             S["legendless"] = LegEndless.Steps;
+            S["lootodds"] = LootOdds.Steps;
             S["coopgate"] = CoopGateTest.Steps;
             S["weaponaudit"] = WeaponAudit.Steps;
             S["perfreal_ric"] = () => { PerfProbe.Real = true; PerfProbe.RicAB = true; return PerfProbe.Steps(boss: true, fight: true); };

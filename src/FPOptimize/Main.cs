@@ -61,6 +61,8 @@ namespace FPOptimize
                 if (!off.Contains("player")) PlayerCache.Install(HarmonyInstance);
                 if (!off.Contains("impact")) ImpactSound.Install(HarmonyInstance);
                 if (!off.Contains("cooptick")) CoopTick.Install(HarmonyInstance);
+                if (!off.Contains("steamidle")) SteamIdle.Install(HarmonyInstance);
+                if (!off.Contains("voice")) VoicePreload.Install(HarmonyInstance);
                 Log("[init] done");
             }
             catch (Exception e) { Enabled = false; Log("[init] exception, all features OFF: " + e); }
@@ -85,12 +87,19 @@ namespace FPOptimize
             Log("[impact] " + ImpactSound.Stats());
             Log("[cooptick] " + CoopTick.Stats());
             ImpactSound.OnSceneLoaded();
+            Log("[player] " + PlayerCache.Detail());
+            Log("[steamidle] " + SteamIdle.Stats());
+            SteamIdle.OnSceneLoaded();
+            Log("[voice] " + VoicePreload.Stats());
+            VoicePreload.OnSceneLoaded();
         }
 
         public override void OnUpdate()
         {
+            SteamIdle.Tick(FPModOption.CoopGuard.Off);   // co-op では休ませた音源をすべて戻す
             if (FPModOption.CoopGuard.Off) return;
             LocScan.Update();
+            VoicePreload.Tick();
             if (Verify) { LocScan.VerifyTick(); AiSight.VerifyTick(); }
         }
 
@@ -106,7 +115,7 @@ namespace FPOptimize
     public static class SafePatcher
     {
         static Dictionary<IntPtr, int> _ptrCount;
-        static readonly string[] Assemblies = { "Assembly-CSharp", "Il2CppFPLeaderboard.Client", "UnityEngine.AudioModule", "Il2CppImpactCFX", "Unity.TextMeshPro", "UnityEngine.UI", "UnityEngine.CoreModule" };
+        static readonly string[] Assemblies = { "Assembly-CSharp", "Il2CppFPLeaderboard.Client", "UnityEngine.AudioModule", "Il2CppImpactCFX", "Unity.TextMeshPro", "UnityEngine.UI", "UnityEngine.CoreModule", "Il2CppSteamAudioUnity" };
 
         static void BuildIndex()
         {

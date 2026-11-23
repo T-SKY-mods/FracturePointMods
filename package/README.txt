@@ -1,4 +1,4 @@
-﻿Fracture Point fan MOD set 1.4.1
+﻿Fracture Point fan MOD set 1.5.0
 =====================================
 
 Game : Steam build 26841316 (Update 22) / Mod loader: MelonLoader 0.7.3
@@ -31,7 +31,7 @@ Japanese: README_JA.txt
     - Every weapon you find gets a rarity (Common to Legendary) and its own stats (damage, fire rate,
       control, ergonomics). Deeper floors drop higher rarities more often
       Every weapon type is equally likely to drop, on every floor
-      Control +1 = recoil about -3%, ergonomics +1 = aiming speed +1%
+      Control +1 = recoil about -3%, ergonomics +1 = aiming speed +2%
       Ergonomics and control are shown from the real aiming speed and recoil (same number = same performance)
     - Weapon mastery (Lv1-100): kills level it up; every 10 levels gives an upgrade point (free respec)
     - Endless mode floors sometimes become a boss room (stronger every 10 floors)
@@ -49,7 +49,8 @@ Japanese: README_JA.txt
 
   [Weapon customization mod] (FPCustom)
     - Add and remove attachments on the "CUSTOMIZE" page of the stash
-      Rifles / SMGs / shotguns: 20 attachments (muzzle 5, grip 5, sight 5, laser 3, magazine 2)
+      Rifles / SMGs / shotguns: 24 attachments (muzzle 5, grip 5, sight 5, laser 3, stock 4, magazine 2)
+        Stocks fit weapons that come with a stock
       Handguns: 15 attachments (muzzle 5, stock 4, sight 1, laser 3, magazine 2)
     - Unlocking needs "Broken Weapon Parts" (per weapon type)
     - Each attachment changes stats such as recoil, ergonomics and reload
@@ -62,8 +63,17 @@ Japanese: README_JA.txt
     - While aiming, handgun bullets go where the sights point
     - With the rarity mod ON, you can switch between the mastery page and the customize page
 
+  [Endless tuning mod] (FPEndless)
+    - Pick "TUNED" on the endless-mode terminal and set enemy damage (x1-4), enemy count (x1-2)
+      and enemy health (x1-2). "NORMAL" plays the game as usual
+    - Harder settings raise your luck (up to x4): weapons and loot items get higher rarities.
+      Ammo, healing items, armor, magazines and money drop as usual
+    - In tuned runs, the lucky cat and the vase add to the luck (lucky cat x1.25, vase x1.5)
+    - The entry fee rises with the difficulty (up to $50,000)
+
   [Optimization mod] (FPOptimize)
     - Cuts wasted CPU work without changing visuals or controls: fewer stutters and less FPS drop with many enemies
+    - Fewer hitches in firefights: when enemies die, when loot drops and when enemy voices play for the first time
 
   [MOD settings] (FPModOption)
     - Shared parts used by every mod, and the "MOD" tab in the settings. Always on
@@ -117,8 +127,8 @@ Japanese: README_JA.txt
   Start the game with the survival mode ON, enter your room to get your items back, then uninstall.
 
   Manual removal
-    Delete FPModOption.dll, FPRarity.dll, FPSurvival.dll, FPCustom.dll and FPOptimize.dll from <game folder>\Mods\.
-    (Optional) also delete the FPModOption, FPRarity, FPSurvival, FPCustom and FPOptimize folders in <game folder>\UserData\.
+    Delete FPModOption.dll, FPRarity.dll, FPSurvival.dll, FPCustom.dll, FPOptimize.dll and FPEndless.dll from <game folder>\Mods\.
+    (Optional) also delete the FPModOption, FPRarity, FPSurvival, FPCustom, FPOptimize and FPEndless folders in <game folder>\UserData\.
     This also deletes the mod data (rarities, mastery, attachments, survival record, settings)
 
 

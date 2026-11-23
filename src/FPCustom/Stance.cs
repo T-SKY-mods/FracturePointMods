@@ -56,6 +56,7 @@ namespace FPCustom
                 h.Patch(AccessTools.Method(typeof(IkState), "OnEvaluatePose"), FPModOption.CoopGuard.Hm(typeof(Stance), nameof(Ik_Pre)));
                 h.Patch(AccessTools.Method(typeof(DemoWeapon), "OnEquip"), FPModOption.CoopGuard.Hm(typeof(Stance), nameof(Equip_Pre)));
                 h.Patch(AccessTools.Method(typeof(AdsState), "OnGameThreadUpdate"), FPModOption.CoopGuard.Hm(typeof(Stance), nameof(Ads_Pre)));
+                h.Patch(AccessTools.Method(typeof(AdsState), "InitializeState"), null, FPModOption.CoopGuard.Hm(typeof(Stance), nameof(AdsInit_Post)));
                 h.Patch(AccessTools.Method(typeof(Il2Cpp.FPSFireManager), "Fire"), FPModOption.CoopGuard.Hm(typeof(Stance), nameof(Fire_Pre)), FPModOption.CoopGuard.Hm(typeof(Stance), nameof(Fire_Post)));
                 Patched = true;
             }
@@ -194,6 +195,60 @@ namespace FPCustom
         static readonly System.Collections.Generic.Dictionary<IntPtr, (Transform Bone, Vector3 Pose)> _adsOrigBone = new();
         static Vector3 _camPose;   // 「Camera」の骨の元の姿勢（親＝頭の骨から見た位置・向き）。構えの層はこれを基準にカメラを動かす
         public static string AimBoneForTest = "";
+        static AdsState _lastAds; static bool _lastAdsStocked;
+        // ---------- ハンドガンの「CameraSocket」を元の位置に保つ（2026-11-23 エイムできない不具合） ----------
+        //   ハンドガンの構えの層は CameraSocket（Camera の子）を毎フレーム「元の位置＋構えの分」に書く。
+        //   ストック付きの間は書く先を Camera に替えているので、構えたまま持ち替えて層の書く先を戻した瞬間に
+        //   層が CameraSocket を構えの途中の位置に書いたまま捨てられると、CameraSocket がずれたまま残る（ゲームを再起動するまで）。
+        //   構えの層は持つたびに作り直され、そのとき CameraSocket の位置から「構えの差分」と「元の位置」を覚えるので、
+        //   以後のイーグルは構えてもサイトが画面の中心から 4cm ずれる（腰だめのように見える）。
+        //   → 層が作られたとき、CameraSocket が最初に見た位置からずれていたら戻し、覚えた差分も直す
+        static readonly System.Collections.Generic.Dictionary<IntPtr, Vector3> _sockRest = new();
+        public static int SocketFixesForTest;
+        static void AdsInit_Post(AdsState __instance)
+        {
+            try
+            {
+                var sock = __instance._aimTargetBone; var root = __instance._owner?.transform; var wb = __instance._weaponIkBone;
+                if (sock == null || root == null || wb == null || sock.name == "Camera") return;
+                if (!_sockRest.TryGetValue(sock.Pointer, out var rest)) { _sockRest[sock.Pointer] = sock.localPosition; return; }
+                if ((sock.localPosition - rest).sqrMagnitude < 1e-8f) return;
+                var was = sock.localPosition;
+                sock.localPosition = rest;
+                __instance._targetDefaultPose = rest;
+                var add = __instance._additivePose;
+                add.position = root.InverseTransformPoint(sock.position) - root.InverseTransformPoint(wb.position);
+                __instance._additivePose = add;
+                SocketFixesForTest++;
+                Main.Log($"[stance] {sock.name} was left at {was.ToString("F3")}: put back to {rest.ToString("F3")}");
+            }
+            catch (Exception e) { Core.LogOnce("stanceinit", "[stance] ads init failed: " + e.Message); }
+        }
+        // 古い構えの層の記録が溜まらないように
+        static void Trim(IntPtr keep)
+        {
+            if (_adsOrigBone.Count <= 8) return;
+            var k = new System.Collections.Generic.List<IntPtr>(_adsOrigBone.Keys);
+            foreach (var p in k) if (p != keep) _adsOrigBone.Remove(p);
+        }
+        // テスト用：構えの状態をまとめて文字にする
+        public static string DiagForTest()
+        {
+            string s = $"aimW {_aimW:0.00} aimAll {_aimAll:0.00} w {_w:0.00} hold {_hold} armW {_armW:0.00}";
+            try
+            {
+                if (_camBone != null) s += $" cam {_camBone.localPosition.ToString("F3")} pose {_camPose.ToString("F3")}";
+                if (_weaponBone != null) s += $" wb {_weaponBone.localPosition.ToString("F3")} {_weaponBone.localEulerAngles.ToString("F0")}";
+                var a = _lastAds;
+                if (a != null) s += $" | ads {a.Pointer} stocked {_lastAdsStocked} target {a._aimTargetBone?.name} def {a._targetDefaultPose.ToString("F3")} cachedAp {a._cachedAimPoint?.name}/{a._cachedAimPoint?.parent?.name} active {a._cachedAimPoint?.gameObject.activeInHierarchy} weight {a._aimingWeight:0.00} apPlay {a._aimPointPlayback:0.00} blend {a._settings?.cameraBlend} settings {a._settings?.name}";
+                var dw = Weapons.Active();
+                if (dw != null && a?._cachedAimPoint != null) s += $" apOnWeapon {a._cachedAimPoint.IsChildOf(dw.transform)}";
+                if (a != null) s += $" apPose {a._aimPoint.position.ToString("F3")} {a._aimPoint.rotation.eulerAngles.ToString("F0")} prev {a._prevAimPoint.position.ToString("F3")} add {a._additivePose.position.ToString("F3")}";
+                if (dw != null && _weaponBone != null) s += $" gunInWb {_weaponBone.InverseTransformPoint(dw.transform.position).ToString("F3")}";
+            }
+            catch (Exception e) { s += " diag failed: " + e.Message; }
+            return s;
+        }
         static void Ads_Pre(AdsState __instance)
         {
             try
@@ -215,15 +270,17 @@ namespace FPCustom
                         Main.Log($"[stance] camera bone: {(_camBone != null ? _camBone.name + " under " + _camBone.parent?.name : "not found")} (was {sock?.name} under {sock?.parent?.name})");
                     }
                     if (_camBone == null) return;
-                    if (!_adsOrigBone.ContainsKey(key)) _adsOrigBone[key] = (__instance._aimTargetBone, __instance._targetDefaultPose);
+                    if (!_adsOrigBone.ContainsKey(key)) { _adsOrigBone[key] = (__instance._aimTargetBone, __instance._targetDefaultPose); Trim(key); }
                     if (__instance._aimTargetBone == null || __instance._aimTargetBone.Pointer != _camBone.Pointer) { __instance._aimTargetBone = _camBone; __instance._targetDefaultPose = _camPose; }
                 }
-                else if (_adsOrigBone.TryGetValue(key, out var orig))
+                // 構えが残っている間は戻さない（戻した書く先に、層が構えの途中の位置を書いたまま残る）
+                else if (_adsOrigBone.TryGetValue(key, out var orig) && __instance._aimingWeight <= 0.001f)
                 {
                     if (orig.Bone != null) { __instance._aimTargetBone = orig.Bone; __instance._targetDefaultPose = orig.Pose; }
                     _adsOrigBone.Remove(key);
                 }
                 AimBoneForTest = __instance._aimTargetBone?.name ?? "";
+                _lastAds = __instance; _lastAdsStocked = stocked;
             }
             catch (Exception e) { Core.LogOnce("stanceads", "[stance] ads bone failed: " + e.Message); }
         }

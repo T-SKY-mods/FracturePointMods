@@ -13,7 +13,8 @@ namespace FPCustom
     //   その骨の座標）を骨の子に置き、元の描画を消す（ほぼすべての頂点が 1 つの骨に重み 1 なので、動きは同じ）
     public static class MuzzleCut
     {
-        const string Suffix = "_nomuz", Loaded = "FPR_", PartName = "cut_b";
+        const string Suffix = "_nomuz", Loaded = "FPR_";
+        public const string PartName = "cut_b";
         static readonly Dictionary<int, (string Renderer, string Base)> Merged = new()
         {
             [0] = ("AKS-74N/ak74m/GameObject/handle_low", "ak74"),   // AK-74：ブレーキ z 0.425〜0.511
@@ -69,6 +70,9 @@ namespace FPCustom
             if (Current(inst.transform, prefab.transform, id) is not { } c || c.cur.EndsWith(Suffix)) return;
             Set(c.mf, c.pmf, c.cur + Suffix, id);
         }
+
+        // 骨ごとの形（<name>_b<番号>.fpm）を骨の子に置き、元の描画を消す（StockCut も使う）
+        public static void SplitSkinned(SkinnedMeshRenderer sk, string name) => ApplySkinned(sk, name);
 
         static void ApplySkinned(SkinnedMeshRenderer sk, string name)
         {

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Il2Cpp;
 using UnityEngine;
@@ -21,7 +21,9 @@ namespace FPModOption
 
         // ---------- 性能の倍率 ----------
 
-        public static float AdsMult(float ergo) => Mathf.Clamp(Mathf.Pow(1.01f, ergo), AdsSpeed.Min, AdsSpeed.Max);
+        // エルゴ +1 で構える速さ ×ErgoStep（2026-11-22 ユーザー：上げても速くなった感じがしない → 1.01 から 1.02 に。+15 で約 1.35 倍）
+        public const float ErgoStep = 1.02f;
+        public static float AdsMult(float ergo) => Mathf.Clamp(Mathf.Pow(ErgoStep, ergo), AdsSpeed.Min, AdsSpeed.Max);
         // 0.1% 未満は 0（コントロール +216 くらいから反動なし）
         public static float RecoilMult(float control) { float m = Mathf.Exp(-control / CtlLog); return m < 0.001f ? 0f : Mathf.Min(m, 1.6f); }
 

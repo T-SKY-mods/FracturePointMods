@@ -16,11 +16,11 @@ For game Update 22 (Steam build 26841316). The mods turn themselves off in co-op
 
 ## English
 
-Five mods in one package. Install once, then turn each mod on or off in **Settings > MOD** on the title screen.
+Six mods in one package. Install once, then turn each mod on or off in **Settings > MOD** on the title screen.
 
 ### Rarity mod (FPRarity)
 - Every weapon you find gets a rarity (Common to Legendary) and its own stats: damage, fire rate, control, ergonomics. Deeper floors drop higher rarities more often
-- Control +1 = recoil about -3%, ergonomics +1 = aiming speed +1%
+- Control +1 = recoil about -3%, ergonomics +1 = aiming speed +2%
 - Weapon mastery (Lv1-100): kills level it up, and every 10 levels gives an upgrade point (free respec)
 - Endless mode floors sometimes become a boss room (stronger every 10 floors)
 - Stats are shown on the game's own stat cards and tooltips
@@ -34,7 +34,7 @@ Five mods in one package. Install once, then turn each mod on or off in **Settin
 
 ### Weapon customization mod (FPCustom)
 - Add and remove attachments on the "CUSTOMIZE" page of the stash
-  - **Rifles / SMGs / shotguns**: 20 attachments (muzzle 5, grip 5, sight 5, laser 3, magazine 2)
+  - **Rifles / SMGs / shotguns**: 24 attachments (muzzle 5, grip 5, sight 5, laser 3, stock 4, magazine 2). Stocks fit weapons that come with a stock
   - **Handguns**: 15 attachments (muzzle 5, stock 4, sight 1, laser 3, magazine 2)
 - Unlock attachments with "Broken Weapon Parts" (per weapon type)
 - Each attachment has its own effect: recoil, ergonomics, reload, fire rate, damage and more
@@ -42,8 +42,14 @@ Five mods in one package. Install once, then turn each mod on or off in **Settin
 - Handguns with a stock are held against the shoulder when aiming, like a main weapon
 - While aiming, handgun bullets go where the sights point
 
+### Endless tuning mod (FPEndless)
+- Pick "TUNED" on the endless-mode terminal and set enemy damage (x1-4), enemy count (x1-2) and enemy health (x1-2)
+- Harder settings raise your luck (up to x4): weapons and loot items get higher rarities. Ammo, healing items, armor, magazines and money drop as usual
+- The entry fee rises with the difficulty (up to $50,000)
+
 ### Optimization mod (FPOptimize)
 - Cuts wasted CPU work without changing visuals or controls: fewer stutters and less FPS drop with many enemies
+- Fewer hitches in firefights: when enemies die, when loot drops and when enemy voices play for the first time
 
 ### MOD settings (FPModOption)
 - Shared parts used by every mod, and the "MOD" tab in the settings (always on)
@@ -66,11 +72,11 @@ Details: `README.txt` in the zip.
 
 ## 日本語
 
-5 つの MOD をまとめたセットです。一度入れたら、タイトル画面の **設定 > MOD** で MOD ごとにオン・オフできます。
+6 つの MOD をまとめたセットです。一度入れたら、タイトル画面の **設定 > MOD** で MOD ごとにオン・オフできます。
 
 ### レアリティmod（FPRarity）
 - 拾った武器 1 本ごとに、レアリティ（コモン〜レジェンダリー）と性能（ダメージ・連射速度・コントロール・エルゴ）が付きます。深い階ほど高レアが出やすくなります
-- コントロール +1 で反動 約 -3%、エルゴ +1 で構える速さ +1%
+- コントロール +1 で反動 約 -3%、エルゴ +1 で構える速さ +2%
 - 武器熟練度（Lv1〜100）。キルで上がり、10 レベルごとの強化ポイントで武器を強くできます（振り直し自由）
 - エンドレスモードの階が、ときどきボス部屋になります（10 階ごとに強くなります）
 - 性能はゲーム本来の性能カードやツールチップに出ます
@@ -84,7 +90,7 @@ Details: `README.txt` in the zip.
 
 ### 武器カスタマイズmod（FPCustom）
 - 保管庫の「カスタマイズ」ページで、武器にアタッチメントを付け外しできます
-  - **ライフル・SMG・ショットガン**: 20 種類（マズル 5・グリップ 5・サイト 5・レーザー 3・マガジン 2）
+  - **ライフル・SMG・ショットガン**: 24 種類（マズル 5・グリップ 5・サイト 5・レーザー 3・ストック 4・マガジン 2）。ストックは、元からストックのある武器に付けられます
   - **ハンドガン**: 15 種類（マズル 5・ストック 4・サイト 1・レーザー 3・マガジン 2）
 - 解放には「壊れた武器部品」が必要です（武器の種類ごと）
 - アタッチメントごとに効果があります（反動・エルゴ・リロード・連射速度・ダメージなど）
@@ -92,8 +98,14 @@ Details: `README.txt` in the zip.
 - ストックを付けたハンドガンは、メイン武器のようにストックを肩に当てて構えます
 - ハンドガンはエイム中、照準どおりに弾が飛びます
 
+### エンドレス調節mod（FPEndless）
+- エンドレスモードの端末で「調節」を選ぶと、敵の強さ（1〜4 倍）・敵の数（1〜2 倍）・敵の体力（1〜2 倍）を変えられます
+- 難しくするほど運が上がり（最大 4 倍）、武器と戦利品のレアリティが高くなります。弾薬・回復・防具・マガジン・お金はいつも通り出ます
+- 参加費は難しさに応じて上がります（最大 $50,000）
+
 ### 最適化mod（FPOptimize）
 - 見た目と操作を変えずに CPU の無駄な処理を減らし、カクつきと敵が多い場面の FPS 低下を軽くします
+- 撃ち合い中のカクつきを減らします（敵が倒れたとき・戦利品が出たとき・敵の声が初めて鳴るとき）
 
 ### MOD 設定（FPModOption）
 - すべての MOD が使う共通の部品と、設定画面の「MOD」タブです（オフにはできません）
@@ -119,6 +131,7 @@ C# (MelonLoader 0.7.3 / Il2CppInterop / Harmony). Build notes: [docs/BUILD.txt](
 
 ## Credits / クレジット
 - 3D models: free models from Sketchfab (CC BY 4.0 / CC0), edited. Authors and links / 作者とリンク: [docs/CREDITS_FPCustom.txt](docs/CREDITS_FPCustom.txt), [docs/CREDITS_FPRarity.txt](docs/CREDITS_FPRarity.txt)
+- Main-weapon stocks: "Low Poly Modular Weapon Bundle - Pack Alpha" by KK Models (Unity Asset Store, standard EULA; built into the mod, not shipped as model files) / メイン武器のストック: KK Models「Low Poly Modular Weapon Bundle - Pack Alpha」（Unity Asset Store、標準 EULA。MOD に組み込み、モデルのファイルとしては配布していません）
 - Some models are edited versions of the game's own models / 一部のモデルは、ゲームのモデルを加工したものです
 - Made with the help of AI (Claude) / AI（Claude）の支援で作成
 

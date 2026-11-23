@@ -18,7 +18,8 @@ namespace FPCustom
         const int Probe = 128, Win = 14;   // 縮小したテクスチャの大きさ・窓の大きさ（画素）
 
         static readonly Dictionary<(IntPtr, int), Vector4> _window = new();   // （テクスチャ, 窓の大きさ）→ 窓 (x0, y0, w, h)（UV）
-        static readonly Dictionary<IntPtr, float> _greyFrac = new();      // テクスチャ → 色の付いていない（金属・黒の樹脂の）画素の割合
+        static readonly Dictionary<IntPtr, float> _greyFrac = new();
+        static readonly Dictionary<IntPtr, Color> _domColor = new();      // テクスチャ → 主な色（sRGB。木・色付きの所を除いた灰色・黒の中央）      // テクスチャ → 色の付いていない（金属・黒の樹脂の）画素の割合
         static readonly Dictionary<string, Material> _mats = new();        // 材質の複製（元の材質＋窓＋大きさ）
         static readonly Dictionary<IntPtr, Mesh> _boxMeshes = new();       // 元のメッシュ → 箱の投影の UV のメッシュ
 
@@ -193,6 +194,8 @@ namespace FPCustom
             var prev = RenderTexture.active; RenderTexture.active = rt;
             t = new Texture2D(PatchPx, PatchPx, TextureFormat.RGBA32, true, linear) { name = Mount.Prefix + "patch_" + src.name };
             t.ReadPixels(new Rect(0, 0, PatchPx, PatchPx), 0, 0);
+            Despeckle(t);
+            _stripe[src.Pointer] = Anisotropy(t);
             if (!linear)
             {
                 // 色の平均（sRGB）。色合いを合わせる部品（ワイヤーストック）用
@@ -205,6 +208,65 @@ namespace FPCustom
             t.wrapMode = TextureWrapMode.Mirror; t.filterMode = FilterMode.Trilinear; t.anisoLevel = 4;
             t.hideFlags = HideFlags.DontUnloadUnusedAsset;
             return _patches[(src.Pointer, PatchWin)] = t;
+        }
+
+        // 筋の強さ：横向きと縦向きの隣の画素との差の比（1 = 向きなし。リブ・溝の筋の模様は大きい）
+        static readonly Dictionary<IntPtr, float> _stripe = new();
+        static float Anisotropy(Texture2D t)
+        {
+            int W = t.width, H = t.height; var px = t.GetPixels();
+            static float Y(Color c) => 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b;
+            double dx = 0, dy = 0;
+            for (int y = 0; y < H - 1; y++) for (int x = 0; x < W - 1; x++)
+            {
+                float v = Y(px[y * W + x]);
+                dx += Mathf.Abs(Y(px[y * W + x + 1]) - v); dy += Mathf.Abs(Y(px[(y + 1) * W + x]) - v);
+            }
+            return (float)(Math.Max(dx, dy) / Math.Max(1e-6, Math.Min(dx, dy)));
+        }
+        // 材質の繰り返し用の切れ端が筋の模様か（ストックの元にしない）
+        public const float StripeMax = 1.5f;
+        public static float Stripiness(Material m)
+        {
+            var tex = m?.GetTexture("_BaseMap"); if (tex == null) return 1f;
+            if (!_stripe.TryGetValue(tex.Pointer, out var a)) { Patch(tex, Window(tex, PatchWin), false); a = _stripe.TryGetValue(tex.Pointer, out var b) ? b : 1f; }
+            return a;
+        }
+
+        // 繰り返すと目立つ点（ねじ穴・傷・汚れの粒）を消す：周り（半径 R）の平均からの差が大きい画素を、差 1.5σ までに抑える
+        public static int DespeckledForTest;
+        static void Despeckle(Texture2D t)
+        {
+            const int R = 12;
+            int W = t.width, H = t.height;
+            var px = t.GetPixels();
+            var tmp = new Color[px.Length]; var mean = new Color[px.Length];
+            float inv = 1f / (2 * R + 1);
+            for (int y = 0; y < H; y++)
+            {
+                Color s = default;
+                for (int k = -R; k <= R; k++) s += px[y * W + ((k % W) + W) % W];
+                for (int x = 0; x < W; x++) { tmp[y * W + x] = s * inv; s += px[y * W + (x + R + 1) % W] - px[y * W + ((x - R) % W + W) % W]; }
+            }
+            for (int x = 0; x < W; x++)
+            {
+                Color s = default;
+                for (int k = -R; k <= R; k++) s += tmp[(((k % H) + H) % H) * W + x];
+                for (int y = 0; y < H; y++) { mean[y * W + x] = s * inv; s += tmp[((y + R + 1) % H) * W + x] - tmp[(((y - R) % H + H) % H) * W + x]; }
+            }
+            static float D(Color a, Color b) { var d = a - b; return Mathf.Sqrt(d.r * d.r + d.g * d.g + d.b * d.b + d.a * d.a); }
+            double v = 0; for (int i = 0; i < px.Length; i++) { float d = D(px[i], mean[i]); v += d * d; }
+            float lim = 1.5f * Mathf.Sqrt((float)(v / px.Length)), n = 0;
+            for (int i = 0; i < px.Length; i++)
+            {
+                float d = D(px[i], mean[i]);
+                if (d > lim && d > 0.0001f) { px[i] = mean[i] + (px[i] - mean[i]) * (lim / d); n++; }
+            }
+            // 大きなむら（帯・明暗の差）も消す：周りの平均を全体の平均に置き換える（細かな粒・凹凸だけ残す）→ 繰り返しの継ぎ目・帯が見えない
+            Color g = default; foreach (var c in mean) g += c; g /= mean.Length;
+            for (int i = 0; i < px.Length; i++) { var c = px[i] - mean[i] + g; px[i] = new Color(Mathf.Clamp01(c.r), Mathf.Clamp01(c.g), Mathf.Clamp01(c.b), Mathf.Clamp01(c.a)); }
+            t.SetPixels(px);
+            DespeckledForTest = (int)n;
         }
 
         // 木の部分（subs のサブメッシュ）に、ゲームの木の材質（AKSU の木のハンドガード）を貼る。木目は部品の前後方向
@@ -329,6 +391,20 @@ namespace FPCustom
             return best?.sharedMaterial;
         }
 
+        // 部品の近くの銃の本体の材質（Body の元）
+        public static Material BodySource(Transform gun, Bounds near) => Source(gun, Role.Body, near);
+
+        // 材質の見た目の主な色（sRGB）：テクスチャの主な色 × 材質の色
+        public static Color DomColor(Material m)
+        {
+            var tex = m?.GetTexture("_BaseMap");
+            if (tex == null) return new Color(0.2f, 0.2f, 0.2f);
+            Window(tex);
+            var d = _domColor.TryGetValue(tex.Pointer, out var c) ? c : new Color(0.2f, 0.2f, 0.2f);
+            var bc = m.HasProperty("_BaseColor") ? m.GetColor("_BaseColor") : Color.white;
+            return new Color(d.r * bc.r, d.g * bc.g, d.b * bc.b);
+        }
+
         static bool ActiveUnder(Transform t, Transform gun)
         {
             for (; t != null && t != gun; t = t.parent) if (!t.gameObject.activeSelf) return false;
@@ -432,6 +508,7 @@ namespace FPCustom
                 Color domC = new(dom, dom, dom); int dn = 0; float sr = 0, sg = 0, sb = 0;
                 for (int i = 0; i < cols.Count; i++) if (Mathf.Abs(grey[i] - dom) < 0.06f) { sr += cols[i].r; sg += cols[i].g; sb += cols[i].b; dn++; }
                 if (dn > 0) domC = new Color(sr / dn, sg / dn, sb / dn);
+                _domColor[tex.Pointer] = domC;
                 int wh = win, ww = Mathf.Max(4, win * W / Probe);
                 float best = float.MaxValue;
                 for (int y = 0; y + wh <= H; y += 2)
@@ -455,6 +532,78 @@ namespace FPCustom
             catch (Exception e) { Main.Log($"[skin] window {tex?.name} failed: {e.Message}"); }
             if (t != null) UnityEngine.Object.Destroy(t);
             return _window[(tex.Pointer, win)] = v;
+        }
+
+        // 銃の樹脂（ストック・グリップ・ハンドガード）の材質：まず元のストック（hidePaths。隠してあっても材質は使える）、
+        //   次に銃の中の名前が stock / butt / grip / handguard の灰色の描画物。木・色付きは除く。無ければ null
+        public static Material FurnitureSource(Transform gun, string[] hidePaths)
+        {
+            static bool Usable(Material m)
+            {
+                if (m == null || !m.HasProperty("_BaseMap") || m.GetTexture("_BaseMap") is not Texture tex || m.shader == null || !m.shader.name.Contains("Lit")) return false;
+                if (m.HasProperty("_Surface") && m.GetFloat("_Surface") > 0.5f) return false;
+                Window(tex);
+                return !_greyFrac.TryGetValue(tex.Pointer, out var gf) || gf >= 0.5f;
+            }
+            var cands = new List<(int rank, float size, Renderer r)>();
+            if (hidePaths != null)
+                foreach (var p in hidePaths)
+                    if (gun.Find(p)?.GetComponent<Renderer>() is { } hr) cands.Add((-1, 0f, hr));
+            string[] keys = { "stock", "butt", "grip", "handguard" };
+            foreach (var r in gun.GetComponentsInChildren<Renderer>(true))
+            {
+                if (!SightLab.IsMesh(r)) continue;
+                bool ours = false;
+                for (var t = r.transform; t != null && t != gun; t = t.parent) if (t.name.StartsWith(Mount.Prefix) || t.name.StartsWith("FPR_")) { ours = true; break; }
+                if (ours) continue;
+                var n = r.name.ToLowerInvariant();
+                int rank = Array.FindIndex(keys, k => n.Contains(k));
+                if (rank < 0) continue;
+                var b = SightLab.LocalBounds(r, gun); float size = b.size.x + b.size.y + b.size.z;
+                if (size >= 0.08f) cands.Add((rank, size, r));
+            }
+            cands.Sort((x, y) => x.rank != y.rank ? x.rank.CompareTo(y.rank) : y.size.CompareTo(x.size));
+            foreach (var (_, _, r) in cands)
+            {
+                var m = r.sharedMaterial;
+                if (!Usable(m)) continue;
+                float st = Stripiness(m);
+                if (st > StripeMax) { Main.Log($"[skin] furniture: skip '{r.name}' mat='{m.name}' (striped {st:F2})"); continue; }
+                Main.Log($"[skin] furniture: '{r.name}' mat='{m.name}' (stripe {st:F2})");
+                return m;
+            }
+            return null;
+        }
+
+        // サブメッシュごとに、銃の材質の無地の所を実物の細かさで繰り返して貼る。pick(i) → (元の材質, 役, 色の倍率（リニア）)
+        static readonly Dictionary<string, Material> _tinted = new();
+        public static void TileSubs(MeshRenderer mr, Transform gun, Func<int, (Material src, Role role, Color mult)> pick)
+        {
+            var mf = mr.GetComponent<MeshFilter>();
+            if (mf == null || mf.sharedMesh == null || !mf.sharedMesh.isReadable) return;
+            mf.sharedMesh = BoxMesh(mf.sharedMesh);
+            float scale = MaxScale(mr.transform, gun);
+            var mats = mr.sharedMaterials;
+            for (int i = 0; i < mats.Length; i++)
+            {
+                var (src, role, mult) = pick(i);
+                if (src == null) continue;
+                var m = Tiled(src, scale, role);
+                if (mult != Color.white && m.HasProperty("_BaseColor"))
+                {
+                    string key = $"{m.Pointer}_{mult.r:F3}_{mult.g:F3}_{mult.b:F3}";
+                    if (!_tinted.TryGetValue(key, out var tm) || tm == null)
+                    {
+                        tm = new Material(m) { name = m.name, hideFlags = HideFlags.DontUnloadUnusedAsset };
+                        var c = m.GetColor("_BaseColor");
+                        tm.SetColor("_BaseColor", new Color(Mathf.LinearToGammaSpace(Mathf.GammaToLinearSpace(c.r) * mult.r), Mathf.LinearToGammaSpace(Mathf.GammaToLinearSpace(c.g) * mult.g), Mathf.LinearToGammaSpace(Mathf.GammaToLinearSpace(c.b) * mult.b), c.a));
+                        _tinted[key] = tm;
+                    }
+                    m = tm;
+                }
+                mats[i] = m;
+            }
+            mr.sharedMaterials = mats;
         }
 
         // 箱の投影の UV：面の向きで一番近い軸を捨て、残りの 2 軸の位置（最小の角を 0）を UV に

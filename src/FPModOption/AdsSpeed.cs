@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Il2CppKINEMATION.FPSAnimationFramework.Runtime.Core;
 using Il2CppKINEMATION.FPSAnimationFramework.Runtime.Layers.AdsLayer;
@@ -7,13 +7,13 @@ using DemoWeapon = Il2CppDemo.Scripts.Runtime.Item.Weapon;
 
 namespace FPModOption
 {
-    // エルゴ → 構える速さ。エルゴ +1 で構える速さ ×1.01（0.5 倍〜2.5 倍。表示のエルゴと同じ単位：StatScale）。
+    // エルゴ → 構える速さ。エルゴ +1 で構える速さ ×1.02（StatScale.ErgoStep。0.5 倍〜2.5 倍。表示のエルゴと同じ単位：StatScale）。
     //   ゲームの WeaponItem.Ergonomic は表示だけで、どこにも使われていない（build 25787540 で調査）。
     //   構える速さは武器のアニメーションのプロファイルの AdsLayerSettings.aimingSpeed（AK 系は 2.3）。プロファイルは武器の種類どうしで
     //   共有なので、手に持っている武器が変わるたびに「元の値 × その 1 本の倍率」を書き込む
     public static class AdsSpeed
     {
-        public const float PerPoint = 0.01f, Min = 0.5f, Max = 2.5f;
+        public const float PerPoint = 0.02f, Min = 0.5f, Max = 2.5f;
 
         // アタッチメントによるエルゴ（FPCustom が入れる。武器の種類ごと）
         public static Func<int, float> ExtraErgo;
@@ -62,6 +62,7 @@ namespace FPModOption
         }
 
         static readonly Dictionary<IntPtr, AdsLayerSettings> _objs = new();
+
 
         // co-op に入ったとき：書き換えたエイムの速さを元に戻す（設定はゲームのデータなので、シーンが変わっても残る）
         public static void Revert()

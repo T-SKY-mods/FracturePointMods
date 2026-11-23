@@ -43,7 +43,7 @@ namespace FPCustom
         const float RefBarrel = 0.0164f;
         static float RifleScale(int id) => Fits.Barrel.TryGetValue(id, out var d) ? UnityEngine.Mathf.Clamp(d / RefBarrel, 0.8f, 1f) : 1f;
 
-        public static bool Has(string model) => File.Exists(Path.Combine(Guards.ModelDir, model, "model.json"));
+        public static bool Has(string model) => ModelLoader.FileExists(Path.Combine(Guards.ModelDir, model, "model.json"));
 
         // その武器に付けられるか（ゲームの部品を複製するもの・最初から付いているものは別に判断）
         public static bool Supported(int id, Att a)
@@ -52,6 +52,7 @@ namespace FPCustom
             return a.Cat switch
             {
                 Cat.Muzzle => MuzzleModel(id, a) is { } m && Has(m.Name) && Fits.Muzzles.ContainsKey(id),
+                Cat.Stock when !a.Pistol => RifleStocks.Supported(id, a),
                 Cat.Stock => StockModelFor(a.Id, id) is { } sm && Has(sm) && (Hinged(a.Id) ? Has(ClampModel) && (a.Id != "p_wood_stock" || Has(WoodIron)) : a.Id == "p_frame_stock" || Vp70Fit.ContainsKey(id) && Has(Vp70Lug) && Has($"pvp70_foot_{id:00}")) && StockAt.ContainsKey(id),
                 _ => false,
             };

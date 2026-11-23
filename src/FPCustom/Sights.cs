@@ -59,6 +59,7 @@ namespace FPCustom
             var eq = Store.Equipped(id, Cat.Sight);
             if (eq != null && !Catalog.IsFactory(eq, id)) Optics.Apply(inst, prefab, id, eq);   // 別のサイトを載せる
             else if (eq == null && HasFactorySight(id)) ToIron(inst, prefab, id, ap, pap);
+            Optics.RedDot(inst);
             // ストック付きのハンドガン：肩に当てて構える（ライフルと同じく、目からグリップの背中まで ShoulderReach。照準の線はそのまま前後だけ）
             var st = Store.Equipped(id, Cat.Stock);
             if (st != null && AssetParts.Supported(id, st) && AssetParts.StockAt.TryGetValue(id, out var sa))

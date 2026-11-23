@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using UnityEngine;
 using DemoWeapon = Il2CppDemo.Scripts.Runtime.Item.Weapon;
 
@@ -72,6 +72,8 @@ namespace FPModOption
         public static Action<bool> ExtMagsForTest;
         // ハンドガンの動きを付ける（true）・外す（false）・そのまま（null）
         public static Func<bool?> MobileOverride;
+        // 移動速度の倍率（アタッチメント。PRS ストックは 0.9）。null なら 1
+        public static Func<float> MoveSpeedMult;
         // カスタマイズの画面が開いているか（開いている間は保管庫の性能のポップアップを出さない）
         public static Func<bool> CustomPageOpen;
         // サイトをアタッチメントで選ぶので、熟練度のサイトは載せない
@@ -81,5 +83,23 @@ namespace FPModOption
 
         // エンドレスの階の作り方を差し替える。true なら差し替えた（FPRarity のボス部屋も作らない）
         public static Func<Il2Cpp.LevelElevator, int, bool> FloorOverride;
+        // 端末で開いているページ（0 = エンドレス、1 = サバイバル）
+        public static Func<int> SurvivalTabletPage;
+        // サバイバルを始めているところ・サバイバル中（エンドレスの調整を効かせない）
+        public static Func<bool> SurvivalBusy;
+        public static bool SurvivalPageOpen() { try { return SurvivalTabletPage?.Invoke() == 1; } catch { return false; } }
+        public static bool InSurvival() { try { return SurvivalBusy?.Invoke() == true; } catch { return false; } }
+
+        // ---------- FPEndless が入れる（エンドレスの調整。調整したランの間だけ 1 以外） ----------
+
+        // 運（武器・戦利品のレアリティを上げる）。FPRarity の武器のレアリティの抽選が使う
+        public static Func<float> EndlessLuck;
+        public static float Luck() { try { return EndlessLuck?.Invoke() ?? 1f; } catch { return 1f; } }
+        // 敵の数の倍率。FPRarity のボス部屋で増やす雑魚の数が使う
+        public static Func<float> EndlessCount;
+        // FPRarity が今の階をボス部屋にした（その階の敵の数は FPRarity が増やす）
+        public static Func<bool> EndlessBossFloor;
+        public static bool IsEndlessBossFloor() { try { return EndlessBossFloor?.Invoke() == true; } catch { return false; } }
+        public static float CountMult() { try { return EndlessCount?.Invoke() ?? 1f; } catch { return 1f; } }
     }
 }

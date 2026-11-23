@@ -22,6 +22,7 @@ namespace FPCustom
             Dir = Path.Combine(MelonLoader.Utils.MelonEnvironment.UserDataDirectory, "FPCustom");
             Directory.CreateDirectory(Dir);
             Log($"FPCustom {Version} start");
+            KkPack.Load();   // 暗号化した KK の模型をメモリに（ストックより先に）
             try
             {
                 if (GameVersion.Disabled) { Log("[init] all mods are disabled: customization OFF"); return; }
@@ -42,6 +43,8 @@ namespace FPCustom
                 Slide.UsePistol(HarmonyInstance);   // ハンドガンの動き（アタッチメントで変わる）
                 Parts.Install(HarmonyInstance);
                 Scan.Register();
+                StockScan.Register(); AimTest.Register();
+                StockFxTest.Register();
                 CustomTest.Register();
                 ShowcaseTest.Register();
                 MountTest.Register();
@@ -57,6 +60,7 @@ namespace FPCustom
                 SeatLab.Register();
                 StatLab.Register();
                 OpticLab.Register();
+                ReticleLab.Register();
                 GuardLab.Register();
                 PartsLab.Register();
                 SkinLab.Register();

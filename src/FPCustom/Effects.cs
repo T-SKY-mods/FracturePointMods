@@ -42,8 +42,18 @@ namespace FPCustom
         public const float BoosterRate = 1.15f;      // フラッシュコーン：連射速度
         public const float LinCompDamage = 15f;      // リニアコンペンセイター：ダメージ +15（固定値）
         public const float LegMult = 0.5f;   // アローヘッドブレーキ：敵の腕（肩〜手。ゲームは 0.1〜0.4 倍）は胴体と同じ 1 倍に（ArmFull）、脚（1 倍）は 0.5 倍に
+        // メイン武器のストック
+        public const float PrsStillControl = 10f;    // PRS：止まっている間のコントロール
+        public const float PrsMoveSpeed = 0.9f;      // PRS：移動速度
+        public const float Sba3MoveErgo = 15f;       // SBA3：歩く・走る・スライディング中のエルゴ
+        public const float Sba3Control = -5f;        // SBA3：コントロール（常に）
+        public const float McxReload = 1.15f;        // MCX：リロード速度
+        public const float MoeReload = 0.9f;         // MOE：リロード速度
+        public const float MoeTime = 10f, MoeControl = 5f, MoeErgo = 7f;   // MOE：リロードを終えてから MoeTime 秒のコントロール・エルゴ
+        static readonly string[] SlowLoadStocks = { "stock_mcx", "stock_moe" };   // 弾込めのキーの弾込め速度 -80%（インベントリはゲームのまま。2026-11-23 ユーザー指定）
+        public const float StockLoadSpeed = 0.2f;   // MCX・MOE：弾込め速度 -80%
         // 撃っている間・動きに合わせて反動を毎フレーム変えるもの（武器ごとの専用の複製を使う）
-        static readonly string[] LiveAtts = { "vertical_grip", "p_compensator", "muzzle_brake", "bipod", "p_wood_stock", "p_frame_stock", "kac_grip" };
+        static readonly string[] LiveAtts = { "vertical_grip", "p_compensator", "muzzle_brake", "bipod", "p_wood_stock", "p_frame_stock", "kac_grip", "stock_prs", "stock_moe" };
         // ポイントエイムで強く、通常のエイムで弱いもの（ワイヤーストック・KAC グリップ）
         static readonly string[] PointAtts = { "p_frame_stock", "kac_grip" };
 
@@ -94,6 +104,16 @@ namespace FPCustom
             D("flash_cone", new[] { (Stat.Control, -7f) }, ($"連射速度+{(BoosterRate - 1f) * 100f:0}%", $"Fire rate +{(BoosterRate - 1f) * 100f:0}%", true));
             D("p_linear_comp", new[] { (Stat.Damage, LinCompDamage), (Stat.Control, -10f) });
             foreach (var id in new[] { "laser", "p_laser" }) D(id, new[] { (Stat.Control, 2f), (Stat.Ergo, -4f) });
+            // メイン武器のストック（元のストックと差し替える。2026-11-22 ユーザー指定）
+            D("stock_prs", none, ($"静止時コントロール+{PrsStillControl:0}", $"Control +{PrsStillControl:0} while standing still", true),
+                ($"移動速度-{(1f - PrsMoveSpeed) * 100f:0}%", $"Move speed -{(1f - PrsMoveSpeed) * 100f:0}%", false));
+            D("stock_sba3", new[] { (Stat.Control, Sba3Control) }, ($"移動中エルゴノミクス+{Sba3MoveErgo:0}", $"Ergonomics +{Sba3MoveErgo:0} while moving", true));
+        string StockLoadJa = $"弾込め速度-{(1f - StockLoadSpeed) * 100f:0}%", StockLoadEn = $"Loading speed -{(1f - StockLoadSpeed) * 100f:0}%";
+            D("stock_mcx", none, ("ダッシュ中にリロード可能", "Reload while sprinting", true),
+                ($"リロード速度+{(McxReload - 1f) * 100f:0}%", $"Reload speed +{(McxReload - 1f) * 100f:0}%", true), (StockLoadJa, StockLoadEn, false));
+            D("stock_moe", none, ($"リロード後{MoeTime:0}秒間コントロール+{MoeControl:0}", $"Control +{MoeControl:0} for {MoeTime:0}s after reloading", true),
+                ($"リロード後{MoeTime:0}秒間エルゴノミクス+{MoeErgo:0}", $"Ergonomics +{MoeErgo:0} for {MoeTime:0}s after reloading", true),
+                ($"リロード速度-{(1f - MoeReload) * 100f:0}%", $"Reload speed -{(1f - MoeReload) * 100f:0}%", false), (StockLoadJa, StockLoadEn, false));
             foreach (var id in new[] { "laser_blue", "p_laser_blue" }) D(id, new[] { (Stat.Ergo, 4f), (Stat.Control, -2f) });
             foreach (var id in new[] { "laser_green", "p_laser_green" }) D(id, new[] { (Stat.Control, 1f), (Stat.Ergo, 2f) });
         }
@@ -192,7 +212,9 @@ namespace FPCustom
             // 武器のステータス画面・比較のポップアップ（FPRarity）にアタッチメントの値を足す
             Link.ExtraDelta = Deltas;
             AdsSpeed.ExtraErgo = id => Deltas(id).Ergo + (Has(id, "stubby_grip") && Moving() ? StubbyMoveErgo : 0f)   // スタビーグリップ：歩く・走る・スライディング中は構えが速い
-                + (Has(id, PointAtts) ? (PointTarget(id) ? PointErgo : NormalErgo) : 0f);                       // ワイヤーストック：構える先（ポイントエイム・通常のエイム）で
+                + (Has(id, PointAtts) ? (PointTarget(id) ? PointErgo : NormalErgo) : 0f)                        // ワイヤーストック：構える先（ポイントエイム・通常のエイム）で
+                + (Has(id, "stock_sba3") && Moving() ? Sba3MoveErgo : 0f)                                        // SBA3：移動中
+                + (MoeOn(id) ? MoeErgo : 0f);                                                                      // MOE：リロードの後
             Link.RpmShown = (id, rpm) => (Has(id, "p_stock") && Catalog.IsPistol(id) ? (id == G18C ? rpm * G18Rate : StockRpm) : Burst(id) && M16() is { } m16 ? m16.fireRate : rpm) * (Has(id, "flash_cone") ? BoosterRate : 1f);
             Link.DamageShown = (id, dmg) => dmg + DamageAdd(id);
             Link.SyncMags = SyncMags;
@@ -215,7 +237,21 @@ namespace FPCustom
                 else _mobile = null;
                 return _mobile;
             };
-            ReloadSpeed.ExtraMult = w => Has(Weapons.IdOf(w), "fast_mag", "p_fast_mag") ? FastReload : 1f;
+            ReloadSpeed.ExtraMult = w =>
+            {
+                int id = Weapons.IdOf(w);
+                return (Has(id, "fast_mag", "p_fast_mag") ? FastReload : 1f) * (Has(id, "stock_mcx") ? McxReload : 1f) * (Has(id, "stock_moe") ? MoeReload : 1f);
+            };
+            Link.MoveSpeedMult = () => { Active(out int id); return Has(id, "stock_prs") ? PrsMoveSpeed : 1f; };
+            // MCX：ダッシュ中のリロードの間は走る構えにしない（リロードのアニメーションが見える。走る速さ・画面の揺れはそのまま）
+            Slide.HoldPoseWhileSprinting = () => { Active(out int id); return Reloading() && Has(id, "stock_mcx"); };
+            // MOE：リロードの終わり（武器の OnActionEnded。FPRarity のリロード速度もこれを呼び直す）から MoeTime 秒
+            Patch(h, typeof(DemoWeapon), "OnReload", null, nameof(Reload_Post));
+            Patch(h, typeof(DemoWeapon), "OnActionEnded", null, nameof(ActionEnded_Post));
+            // MCX：ダッシュ中にリロードを始められる（ゲームは走っている間はリロードを受け付けない）、リロード中も走り続けられる（走る条件＝何もしていない）
+            SprintReloadPatched = Patch(h, typeof(Il2CppDemo.Scripts.Runtime.Character.FPSController), "OnReload", nameof(FpsReload_Pre), nameof(FpsReload_Post))
+                & Patch(h, typeof(Il2CppDemo.Scripts.Runtime.Character.FPSController), "_InitializeMovement_b__68_4", null, nameof(SprintCondition_Post));
+            // MCX・MOE の弾込めのキーは止めない（2026-11-23：遅くなるだけ。ButtonLoad_Post が時間を延ばす）
 
             Patch(h, typeof(DemoWeapon), "OnEquip", null, nameof(OnEquip_Post));
             HitPatched = Patch(h, typeof(Il2CppBallistics.BulletHandler), "BulletHit", nameof(BulletHit_Pre), nameof(BulletHit_Post));
@@ -223,6 +259,7 @@ namespace FPCustom
             TremorPatched = Lean.Length == 0 || Patch(h, typeof(Il2Cpp.PlayerHealthManager), "Update", null, nameof(HealthUpdate_Post));
             // 弾込めが遅いのはラン中のボタンだけ（保管庫で弾を入れるのはそのまま）
             if (Patch(h, typeof(Il2Cpp.AmmoButtonLoader._LoadMagsSequentially_d__23), "MoveNext", null, nameof(ButtonLoad_Post))) LoadPatchesForTest++;
+            // MCX・MOE もインベントリ（MagUI）での弾込めはゲームのまま（2026-11-23 ユーザー指定）
             // 拡張マガジン：セーブには元のマガジンの大きさで書く（Mod を外すと元の大きさ、余った弾は消える）
             SavePatched = Patch(h, typeof(Il2Cpp.SavesManager), "EncryptSaveJson", nameof(Encrypt_Pre), null)
                         & Patch(h, typeof(Il2Cpp.SavesManager), "Load", null, nameof(SaveLoad_Post))
@@ -231,6 +268,7 @@ namespace FPCustom
         }
 
         public static int LoadPatchesForTest;
+        public static bool SprintReloadPatched;
         public static bool HitPatched, SavePatched, TremorPatched;
 
         static bool Patch(HarmonyLib.Harmony h, Type t, string name, string pre, string post)
@@ -447,7 +485,7 @@ namespace FPCustom
         // 撃った弾数に合わせて毎フレーム書き換える（どちらも毎発その場で読むので、次の 1 発から効く）。
         // 撃った弾数は弾の減りで数える（キーの割り当て・パッドに関係なく）。次の弾が来ないまま連射の間隔の 2 倍がたったら、指を離した扱い
 
-        sealed class LiveRecoil { public RecoilPatternSettings Clone, Original; public RecoilAnimData AnimClone, AnimOriginal; public float Points; public bool Vgrip, Comp, Bipod, Wire; }
+        sealed class LiveRecoil { public RecoilPatternSettings Clone, Original; public RecoilAnimData AnimClone, AnimOriginal; public float Points; public bool Vgrip, Comp, Bipod, Wire, Prs, Moe; }
         static readonly Dictionary<string, LiveRecoil> _live = new();
         static int _shots, _lastAmmo;
         static float _lastShotAt;
@@ -471,6 +509,8 @@ namespace FPCustom
             l.Comp = Has(id, "p_compensator", "muzzle_brake");
             l.Bipod = Has(id, "bipod", "p_wood_stock");
             l.Wire = Has(id, PointAtts);
+            l.Prs = Has(id, "stock_prs");
+            l.Moe = Has(id, "stock_moe");
             SetLive(l, 0);
             return l;
         }
@@ -480,7 +520,8 @@ namespace FPCustom
         static float LiveScale(LiveRecoil l, int shots)
         {
             float points = l.Points + (l.Comp && shots < CompShots ? CompBonus : 0f) + (l.Bipod && Crouching ? BipodControl : 0f)
-                + (l.Wire ? Aim switch { AimKind.Point => PointControl, AimKind.Normal => NormalControl, _ => 0f } : 0f);
+                + (l.Wire ? Aim switch { AimKind.Point => PointControl, AimKind.Normal => NormalControl, _ => 0f } : 0f)
+                + (l.Prs && Still ? PrsStillControl : 0f) + (l.Moe && MoeNow ? MoeControl : 0f);
             if (!l.Vgrip || shots <= 0) return Scale(points);
             return Mathf.Min(Scale(points), StatScale.RecoilMult(points + VgripPerShot * shots));
         }
@@ -497,6 +538,85 @@ namespace FPCustom
                 a.kickback = o.kickback * s; a.kickUp = o.kickUp * s; a.kickRight = o.kickRight * s;
                 a.noiseScalar = o.noiseScalar * s; a.pushAmount = o.pushAmount * s;
             }
+        }
+
+        // ---------- メイン武器のストック ----------
+        // PRS：止まっている間（歩く・走る・スライディング・空中でない）
+        static bool Still, MoeNow;
+        public static bool? StillOverrideForTest;
+        static bool IsStill() => Refs.Fps?._movementComponent?.MovementState == Il2CppDemo.Scripts.Runtime.Character.FPSMovementState.Idle;
+
+        // MOE：リロードを終えた武器と時刻
+        static IntPtr _reloadWeapon, _moeWeapon;
+        static float _moeUntil;
+        public static float MoeLeftForTest => _moeUntil - Time.time;
+        static bool MoeOn(int id)
+        {
+            if (!Has(id, "stock_moe") || Time.time >= _moeUntil) return false;
+            var dw = Active(out int aid);
+            return dw != null && aid == id && dw.Pointer == _moeWeapon;
+        }
+
+        // リロード中（持ち替え・中断で終わりの合図が来なかったときに残らないよう、ゲームの動作中の印も見る）
+        static bool Reloading() => _reloadWeapon != IntPtr.Zero && Refs.Fps != null && (int)Refs.Fps._actionState != 0 && Active(out _)?.Pointer == _reloadWeapon;
+
+        static void Reload_Post(DemoWeapon __instance, bool __result)
+        {
+            if (__result) _reloadWeapon = __instance.Pointer;
+        }
+
+        static void ActionEnded_Post(DemoWeapon __instance)
+        {
+            try
+            {
+                if (__instance.Pointer != _reloadWeapon) return;
+                _reloadWeapon = IntPtr.Zero;
+                int id = Weapons.IdOf(__instance);
+                if (id >= 0 && Has(id, "stock_moe")) { _moeWeapon = __instance.Pointer; _moeUntil = Time.time + MoeTime; Main.Log($"[effect] MOE stock: bonus for {MoeTime:0}s"); }
+            }
+            catch { }
+        }
+
+        // MCX：走っている間のリロード。ゲームの OnReload は「走っている」状態なら何もしないので、その間だけ「歩いている」に見せる
+        static bool _sprintFaked;
+        public static int SprintReloadsForTest;
+        static void FpsReload_Pre(Il2CppDemo.Scripts.Runtime.Character.FPSController __instance)
+        {
+            _sprintFaked = false;
+            try
+            {
+                var mv = __instance._movementComponent;
+                if (mv == null || mv.MovementState != Il2CppDemo.Scripts.Runtime.Character.FPSMovementState.Sprinting) return;
+                Active(out int id);
+                if (!Has(id, "stock_mcx")) return;
+                mv._MovementState_k__BackingField = Il2CppDemo.Scripts.Runtime.Character.FPSMovementState.Walking;
+                _sprintFaked = true;
+            }
+            catch (Exception e) { Core.LogOnce("mcxreload", "[effect] MCX sprint reload failed: " + e.Message); }
+        }
+
+        static void FpsReload_Post(Il2CppDemo.Scripts.Runtime.Character.FPSController __instance)
+        {
+            if (!_sprintFaked) return;
+            _sprintFaked = false;
+            try
+            {
+                __instance._movementComponent._MovementState_k__BackingField = Il2CppDemo.Scripts.Runtime.Character.FPSMovementState.Sprinting;
+                if (__instance._actionState != 0) SprintReloadsForTest++;
+            }
+            catch { }
+        }
+
+        // 走る条件（ゲーム：何もしていないとき）。MCX のリロード中は走ってよい
+        static void SprintCondition_Post(ref bool __result)
+        {
+            if (__result) return;
+            try
+            {
+                Active(out int id);
+                if (Has(id, "stock_mcx") && Reloading()) __result = true;
+            }
+            catch { }
         }
 
         // ---------- バイポッド：しゃがんでいる間 ----------
@@ -616,6 +736,8 @@ namespace FPCustom
             var dw = Active(out int id);
             if (dw == null || id < 0 || !Has(id, LiveAtts) || !_live.TryGetValue(Link.Key(dw, id), out var l) || l.Clone == null || l.Original == null) { _shots = 0; return; }
             Crouching = CrouchOverrideForTest ?? IsCrouching();
+            Still = StillOverrideForTest ?? IsStill();
+            MoeNow = MoeOn(id);
             Aim = AimNow(dw);
             int ammo = dw.SelectedMag?.AmmoCount ?? 0;
             float gap = Mathf.Max(0.25f, 2f * 60f / Mathf.Max(60f, dw.fireRate));
@@ -697,20 +819,25 @@ namespace FPCustom
 
         static bool SlowLoad(string weaponName) => Has(IdByName(weaponName), "ext_mag", "p_ext_mag", "fast_mag", "p_fast_mag");
 
-        static float Stretch(IntPtr it, float total)
+        static float Stretch(IntPtr it, float total, float speed = LoadSpeed)
         {
             if (_loadScaled.TryGetValue(it, out var v) && Mathf.Approximately(v, total)) return total;
             if (_loadScaled.Count > 64) _loadScaled.Clear();
-            return _loadScaled[it] = total / LoadSpeed;
+            return _loadScaled[it] = total / speed;
         }
+
+        public static float ButtonLoadScaleForTest(string weaponName) => 1f / ButtonSpeed(weaponName);
+        // 弾込めのキーの速さ（1 = ゲームのまま）：拡張マガジン・ファストマグと、MCX・MOE のストックを掛ける。インベントリはゲームのまま
+        static float ButtonSpeed(string weaponName) => (SlowLoad(weaponName) ? LoadSpeed : 1f) * (Has(IdByName(weaponName), SlowLoadStocks) ? StockLoadSpeed : 1f);
 
         static void ButtonLoad_Post(Il2Cpp.AmmoButtonLoader._LoadMagsSequentially_d__23 __instance)
         {
             try
             {
                 var mag = __instance._mag_5__4;
-                if (mag != null && SlowLoad(mag.WeaponName) && __instance._totalLoadTime_5__6 > 0f)
-                    __instance._totalLoadTime_5__6 = Stretch(__instance.Pointer, __instance._totalLoadTime_5__6);
+                float sp = mag != null ? ButtonSpeed(mag.WeaponName) : 1f;
+                if (sp < 1f && __instance._totalLoadTime_5__6 > 0f)
+                    __instance._totalLoadTime_5__6 = Stretch(__instance.Pointer, __instance._totalLoadTime_5__6, sp);
             }
             catch { }
         }

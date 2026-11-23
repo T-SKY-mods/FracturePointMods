@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
@@ -50,6 +50,17 @@
     <Reference Include="$(GameDir)\MelonLoader\Il2CppAssemblies\UnityEngine.ParticleSystemModule.dll" />
     <Reference Include="$(GameDir)\MelonLoader\Il2CppAssemblies\Unity.RenderPipelines.Core.Runtime.dll" />
     <Reference Include="$(GameDir)\MelonLoader\Il2CppAssemblies\Unity.RenderPipelines.Universal.Runtime.dll" />
+  </ItemGroup>
+
+  <!-- KK Models の模型（暗号化した物。tools\pack_kk.ps1）と鍵（KkKey.private.cs）がある時だけ DLL に入れる。公開のソースには無いので、その時はストック無しで作られる -->
+  <PropertyGroup Condition="Exists('KkKey.private.cs') And Exists('../../assets/packed/kkpack.bin')">
+    <DefineConstants>$(DefineConstants);KKPACK</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup Condition="Exists('KkKey.private.cs') And Exists('../../assets/packed/kkpack.bin')">
+    <EmbeddedResource Include="../../assets/packed/kkpack.bin" LogicalName="FPCustom.kkpack.bin" />
+  </ItemGroup>
+  <ItemGroup Condition="!Exists('KkKey.private.cs') Or !Exists('../../assets/packed/kkpack.bin')">
+    <Compile Remove="KkKey.private.cs" />
   </ItemGroup>
 
   <!-- 開発中はゲームの Mods には置かない（普段のプレイに影響させない）。autotest.ps1 -Dev のときだけ一時的に Mods へ入れる -->

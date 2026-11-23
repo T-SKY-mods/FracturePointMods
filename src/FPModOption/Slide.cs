@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Il2Cpp;
 using UnityEngine;
@@ -37,7 +37,7 @@ namespace FPModOption
         public const float EvadeChance = 0.70f;
 
         public const float PistolSlideSpeed = 1.15f;    // スライディングの速さ（倍）
-        public const float PistolSlideRate = 0.76f;     // 進み具合の進む速さ（倍）。小さいほど長く滑る（約5m になるよう調整）
+        public const float PistolSlideRate = 0.71f;     // 進み具合の進む速さ（倍）。小さいほど長く滑る（約5m になるよう調整。2026-11-22 移動速度 +5% が重さの仕組みの後に効くようにしたので 0.76→0.71）
         public const float PistolMoveSpeed = 1.05f;     // 歩く・走る・しゃがみ歩きの速さ（倍）
         const float MinProgressBeforeStandUp = 0.15f;   // 滑り始めてすぐには立ち上がらない
 
@@ -68,6 +68,8 @@ namespace FPModOption
             aimRunOn &= SafePatcher.Patch(h, typeof(FPSController), "OnSprintStarted", null, nameof(OnSprintStarted_Pre), null, c);
             aimRunOn &= SafePatcher.Patch(h, typeof(FPSMovement), "UpdateAnimatorParams", null, null, nameof(UpdateAnimatorParams_Post), c);
             aimRunOn &= SafePatcher.Patch(h, typeof(FPSController), "OnFire", new[] { typeof(UnityEngine.InputSystem.InputValue) }, nameof(OnFire_Pre), null, c);
+            // 移動の速さはゲームの重さの仕組み（WeightManager.LateUpdate）が毎フレーム「元の速さ × 重さの倍率」に書き直すので、その後に倍率を掛ける
+            _weightOn = SafePatcher.Patch(h, typeof(Il2Cpp.WeightManager), "LateUpdate", null, null, nameof(WeightLate_Post), c);
             PistolOn = true;
             if (!_pistolStandUpOn || !aimRunOn) GameVersion.AddDegraded("ハンドガンの動き");
         }
@@ -80,6 +82,10 @@ namespace FPModOption
         //   EvadeBonus     : 回避率に足す値（スライディング中・ダッシュ中）
         //   ハンドガンの動きを使うかの上書きは Link.MobileOverride（true＝メイン武器でも使う、false＝ハンドガンでも使わない、null＝武器の種類どおり）
         public static Func<float> EvadeBonus;
+        //   HoldPoseWhileSprinting : true の間は、走っていても走る構え（銃を下げて横に向ける）にしない（MCX ストックのダッシュ中のリロード：
+        //                            リロードのアニメーションが見えるように。走る速さ・画面の揺れはそのまま）
+        public static Func<bool> HoldPoseWhileSprinting;
+        static bool HoldPose() { try { return HoldPoseWhileSprinting?.Invoke() ?? false; } catch { return false; } }
 
         static float Bonus()
         {
@@ -199,16 +205,40 @@ namespace FPModOption
             }
         }
 
+        static int _aimBefore;
         static void OnAim_Pre(FPSController __instance)
         {
+            _aimBefore = (int)__instance._aimState;
             var mv = __instance._movementComponent;
             _sprintWasRequested = mv != null && mv._sprintRequested;
             _toggleWasOn = false;
             try { if (_sprintWasRequested && Mobile()) _toggleWasOn = Proxy?._toggleSprint ?? false; } catch { }
         }
 
-        static void OnAim_Post(FPSController __instance)
+        // エイムを押したのに構えなかったとき、理由を残す（「たまにエイムできない」の調査用。普段は何も書かない）
+        static float _nextAimLog;
+        static void AimDiag(FPSController fps, object[] args)
         {
+            try
+            {
+                bool pressed = args != null && args.Length > 0 && (args[0] is bool b ? b : args[0] is UnityEngine.InputSystem.InputValue iv && iv.isPressed);
+                if (!pressed) return;
+                bool before = _aimBefore == 2 || _aimBefore == 3, after = IsAiming(fps);
+                if (after || (fps.toggleAim && before)) return;   // 構えた／切り替え式で解いた（ふつう）
+                if (Time.realtimeSinceStartup < _nextAimLog) return;
+                _nextAimLog = Time.realtimeSinceStartup + 1f;
+                bool boss = false, bags = false;
+                try { boss = Il2CppCoop.CoopFinalBoss.InputBlocked; } catch { }
+                try { bags = Il2CppCoop.CoopEquipmentBags.InputBlocked; } catch { }
+                var mv = fps._movementComponent;
+                Core.Log($"[aim] pressed but not aiming: state {_aimBefore}->{(int)fps._aimState} action {fps._actionState} pause {fps._isPauseMenuOpened} bossBlock {boss} bagBlock {bags} move {mv?.MovementState} toggle {fps.toggleAim} item {fps.GetActiveItem()?.name} mobile {Mobile()} sliding {IsSliding}");
+            }
+            catch (Exception e) { Core.LogOnce("aimdiag", "[aim] diag failed: " + e.Message); }
+        }
+
+        static void OnAim_Post(FPSController __instance, object[] __args)
+        {
+            AimDiag(__instance, __args);
             try
             {
                 var fps = __instance;
@@ -241,7 +271,8 @@ namespace FPModOption
             try
             {
                 var fps = Refs.Fps;
-                if (fps == null || __instance.MovementState != FPSMovementState.Sprinting || !(IsAiming(fps) || _hipFireRun) || !Mobile()) return;
+                if (fps == null || __instance.MovementState != FPSMovementState.Sprinting) return;
+                if (!((IsAiming(fps) || _hipFireRun) && Mobile()) && !HoldPose()) return;
                 var anim = __instance._animator;
                 if (anim == null) return;
                 int hash = FPSMovement.Sprinting;
@@ -324,6 +355,7 @@ namespace FPModOption
                 fps.OnAim(!fps.toggleAim ? false : true);   // 切り替え ON なら「もう一度押した」、OFF なら「離した」
                 _aimBlocked = true;
                 AimBlocked++;
+                Core.Log($"[aim] sliding: aim released (item {fps.GetActiveItem()?.name}, toggle {fps.toggleAim})");
             }
             if (_wasSliding && !sliding && _aimBlocked)
             {
@@ -348,6 +380,35 @@ namespace FPModOption
 
         // ---------- ハンドガン: 移動速度 +5%、スライディングの速さ ----------
 
+        // ---------- 移動速度の倍率（ハンドガン +5%、アタッチメント。WeightManager が書いた速さに掛ける） ----------
+        static bool _weightOn;
+        static int _weightFrame = -100;
+        static float _outWalk = -1f;
+        public static float LastMoveMultForTest = 1f;
+
+        static float GaitMult() => (Mobile() && PistolActive() ? PistolMoveSpeed : 1f) * MoveMult();
+
+        static void WeightLate_Post(Il2Cpp.WeightManager __instance)
+        {
+            try
+            {
+                if (!PistolOn || CoopGuard.Off) return;
+                var st = __instance.movementSettings;
+                if (st == null) return;
+                _weightFrame = Time.frameCount;
+                // このフレームでゲームが書き直していない（前に掛けた値のまま）なら掛け直さない
+                if (Mathf.Approximately(st.walking.velocity, _outWalk)) return;
+                float m = GaitMult();
+                LastMoveMultForTest = m;
+                if (Mathf.Approximately(m, 1f)) { _outWalk = -1f; return; }   // 掛けていない値は覚えない（次のフレームのゲームの値と同じになり、掛け損ねる）
+                st.walking = WithVelocity(st.walking, st.walking.velocity * m);
+                st.sprinting = WithVelocity(st.sprinting, st.sprinting.velocity * m);
+                st.crouching = WithVelocity(st.crouching, st.crouching.velocity * m);
+                _outWalk = st.walking.velocity;
+            }
+            catch (Exception e) { Core.LogOnce("weightspeed", "[slide] move speed (weight) failed: " + e.Message); }
+        }
+
         // 移動設定（ScriptableObject）ごとの元の速さ
         static readonly Dictionary<IntPtr, (float walk, float sprint, float crouch, float slide)> _baseGaits = new();
 
@@ -363,15 +424,17 @@ namespace FPModOption
                 if (settings == null) return;
                 if (!_baseGaits.TryGetValue(settings.Pointer, out var b))
                 { _baseGaits[settings.Pointer] = b = (settings.walking.velocity, settings.sprinting.velocity, settings.crouching.velocity, settings.slideSpeed); _gaitObjs[settings.Pointer] = settings; }
-                // 移動速度はハンドガンの動きのハンドガンだけ、スライディングの速さはハンドガンの動き全部
+                // 移動速度はハンドガンの動きのハンドガンだけ（とアタッチメントの倍率）、スライディングの速さはハンドガンの動き全部
                 bool mobile = Mobile();
-                float m = mobile && PistolActive() ? PistolMoveSpeed : 1f;
                 float slide = b.slide * (mobile ? PistolSlideSpeed : 1f);
-                if (Mathf.Approximately(settings.walking.velocity, b.walk * m) && Mathf.Approximately(settings.slideSpeed, slide)) return;
+                if (!Mathf.Approximately(settings.slideSpeed, slide)) settings.slideSpeed = slide;
+                // 歩く・走る・しゃがみの速さ：重さの仕組みが動いていれば、その後（WeightLate_Post）で掛ける。動いていない場面だけここで
+                if (_weightOn && Time.frameCount - _weightFrame < 3) return;
+                float m = GaitMult();
+                if (Mathf.Approximately(settings.walking.velocity, b.walk * m)) return;
                 settings.walking = WithVelocity(settings.walking, b.walk * m);
                 settings.sprinting = WithVelocity(settings.sprinting, b.sprint * m);
                 settings.crouching = WithVelocity(settings.crouching, b.crouch * m);
-                settings.slideSpeed = slide;
             }
             catch (Exception e)
             {
@@ -395,6 +458,12 @@ namespace FPModOption
                 s.slideSpeed = b.slide; n++;
             }
             Core.Log($"[coop] movement speeds restored on {n} setting(s)");
+        }
+
+        // アタッチメントの移動速度の倍率（Link.MoveSpeedMult）
+        static float MoveMult()
+        {
+            try { float v = Link.MoveSpeedMult?.Invoke() ?? 1f; return v > 0.1f && v < 3f ? v : 1f; } catch { return 1f; }
         }
 
         static GaitSettings WithVelocity(GaitSettings g, float v) { g.velocity = v; return g; }

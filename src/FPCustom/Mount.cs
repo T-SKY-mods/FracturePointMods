@@ -56,13 +56,36 @@ namespace FPCustom
             ap.position = inst.transform.TransformPoint(local + (laser ? lift : Vector3.zero));
         }
 
+        // サイトを付け替えたら、ホイールで選んだ 2 つ目の照準（傾けた構え）から通常の照準に戻す。
+        //   戻さないと、例えばスコープで傾けた構えにしたままホロに替えると、右クリックで傾いた構えになりホロを覗けない
+        static readonly Dictionary<IntPtr, string> _sightOf = new();
+        public static int ScopeResetsForTest;
+        static void ResetScopeOnSightChange(GameObject inst, int id)
+        {
+            try
+            {
+                var dw = inst.GetComponent<DemoWeapon>();
+                if (dw == null) return;
+                string sight = Store.Equipped(id, Cat.Sight)?.Id ?? "";
+                if (_sightOf.TryGetValue(dw.Pointer, out var was) && was != sight && dw._scopeIndex != 0)
+                {
+                    dw._scopeIndex = 0; ScopeResetsForTest++;
+                    Main.Log($"[mount] {inst.name}: sight {was} -> {sight}, aim back to the main sight");
+                }
+                _sightOf[dw.Pointer] = sight;
+            }
+            catch (Exception e) { Main.Log("[mount] scope reset failed: " + e.Message); }
+        }
+
         public static void Apply(GameObject inst, GameObject prefab, int id)
         {
             var root = inst.transform;
+            ResetScopeOnSightChange(inst, id);
             // 前に付けたものを外す
             var old = new List<GameObject>();
             foreach (var t in root.GetComponentsInChildren<Transform>(true)) if (t.name.StartsWith(Prefix)) old.Add(t.gameObject);
             foreach (var g in old) UnityEngine.Object.DestroyImmediate(g);
+            StockCut.Undo(root, id);            // ストックを除いた形を戻す（ほかの形の差し替えが今の形を見分けられるよう、いちばん先に）
             MuzzleCut.Undo(inst, prefab, id);   // 銃口の部品を除いた形を戻す（サイト・ハンドガードの差し替えより前に）
 
             // 最初から付いている部品：装着中ならそのまま、外していれば消す
@@ -100,9 +123,11 @@ namespace FPCustom
             {
                 if (AssetParts.AttachRear(root, pm, f2.At(AssetParts.RearZ(id, pm, f2.Tip, f2.Back)), mz.Id) != null) added.Add(mz.Id);
             }
-            // ストック（ハンドガン）
+            // ストック（ハンドガン：グリップに付ける。メイン武器：元のストックと差し替える。外したら元のストックを戻す）
             var st = Store.Equipped(id, Cat.Stock);
-            if (st != null && AssetParts.Supported(id, st) && AssetParts.AttachStock(root, id, st.Id) != null) added.Add(st.Id);
+            RifleStocks.ShowVanilla(root, prefab.transform, id, true);
+            if (st != null && !st.Pistol && AssetParts.Supported(id, st) && RifleStocks.Attach(root, prefab.transform, id, st) != null) added.Add(st.Id);
+            else if (st != null && st.Pistol && AssetParts.Supported(id, st) && AssetParts.AttachStock(root, id, st.Id) != null) added.Add(st.Id);
             // 射撃音（サプレッサー）
             Sound.Apply(inst.GetComponent<DemoWeapon>(), prefab.GetComponent<DemoWeapon>(), id);
             // サイドレール（レーザー。付けている間はずっと点いている）

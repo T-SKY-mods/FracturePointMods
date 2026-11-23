@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -57,6 +57,7 @@ namespace FPRarity
             ok &= SafePatcher.Patch(h, typeof(BossfightDoorsChecker), "CheckBossDeath", null, nameof(BossDeath_Pre), null, c);
             ok &= SafePatcher.Patch(h, typeof(BossfightDoorsChecker), "OnBossDied", null, nameof(BossDeath_Pre), null, c);
             if (!ok) GameVersion.AddDegraded("エンドレスのボス部屋");
+            Link.EndlessBossFloor = () => IsBossFloor;
         }
 
         // テスト用：UserData/FPRarity/endless_boss.txt があれば必ずボス部屋にする（中に数字があれば、その階として敵を増やす）
@@ -134,7 +135,9 @@ namespace FPRarity
                 var grunts = room.GetComponentsInChildren<Il2CppEnemyAI.EnemyHealth>(true).Where(e => e.Pointer != boss.Pointer && e.health > 0f && e.gameObject.activeInHierarchy).ToList();
                 if (grunts.Count == 0 && Time.realtimeSinceStartup - _seenAt < 15f) return;
                 _spawned = true;
-                Spawn(grunts.Select(g => g.transform.parent != null ? g.transform.parent.gameObject : g.gameObject).ToList(), ExtraGrunts(Floor), false);
+                // エンドレス調整mod の敵の数：置いてある雑魚も倍率の分だけ増やす
+                int tuned = (int)Math.Round(grunts.Count * (Link.CountMult() - 1f));
+                Spawn(grunts.Select(g => g.transform.parent != null ? g.transform.parent.gameObject : g.gameObject).ToList(), ExtraGrunts(Floor) + Math.Max(0, tuned), false);
                 Spawn(new List<GameObject> { boss.transform.parent != null ? boss.transform.parent.gameObject : boss.gameObject }, ExtraBossCount(Floor), true);
                 MainBoss = boss;
                 _bars = null;   // 増やした敵の分も含めて、次の確認で体力バーを探し直す（一度だけ）

@@ -84,6 +84,19 @@ namespace FPSurvival
                     var t = Tablet.TabletForTest;
                     try { t?.Interact(); } catch (Exception e) { Core.Log("[survtest] focus failed " + e.Message); }
                 }),
+                ("click endless tuned", () =>
+                {
+                    // エンドレスmod の「調整」を押しても 2 ページ目に切り替わらない
+                    var tuned = GameObject.Find("FPEndless tuned")?.GetComponent<Il2CppTMPro.TMP_Text>();
+                    var cam = Camera.main;
+                    if (tuned == null || cam == null) { Core.Log("[survtest] endless tuned text not found"); return; }
+                    var arr = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<Vector3>(4);
+                    tuned.rectTransform.GetWorldCorners(arr);
+                    var p = cam.WorldToScreenPoint((arr[0] + arr[2]) / 2f);
+                    bool clicked = Tablet.Click(new Vector2(p.x, p.y));
+                    Check($"endless tuned click stays on page 1 (at {p}, page {Tablet.Page})", !clicked && Tablet.Page == 0);
+                    if (Tablet.Page != 0) Tablet.SetPage(0);
+                }),
                 ("click the tab", () =>
                 {
                     var at = Tablet.TabScreenPointForTest();

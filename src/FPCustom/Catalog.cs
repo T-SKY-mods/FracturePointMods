@@ -58,6 +58,12 @@ namespace FPCustom
             new Att { Id = "laser",         Cat = Cat.SideRail, Ja = "レーザーサイト(赤)",    En = "Laser sight (red)",   Source = Source.Vanilla, Factory = new[] { 2, 21, 28 } },
             new Att { Id = "laser_blue",    Cat = Cat.SideRail, Ja = "レーザーサイト(青)",    En = "Laser sight (blue)",  Source = Source.Vanilla, Look = "laser", Beam = BlueBeam },
             new Att { Id = "laser_green",   Cat = Cat.SideRail, Ja = "レーザーサイト(緑)",    En = "Laser sight (green)", Source = Source.Vanilla, Look = "laser", Beam = GreenBeam },
+            // ストック（KK Models の LOW POLY MODULAR WEAPON BUNDLE - PACK ALPHA。ユーザーが購入。チューブなどの部品とセットで付ける）。
+            //   バニラでストックの付いていない武器には付けない（RiflePlates.Supported）。付けたら元のストックを隠す
+            new Att { Id = "stock_mcx",     Cat = Cat.Stock,    Ja = "MCX折りたたみストック", En = "MCX folding stock", Source = Source.Asset },
+            new Att { Id = "stock_prs",     Cat = Cat.Stock,    Ja = "PRSストック",           En = "PRS stock",        Source = Source.Asset },
+            new Att { Id = "stock_sba3",    Cat = Cat.Stock,    Ja = "SBA3ストック",          En = "SBA3 stock",       Source = Source.Asset },
+            new Att { Id = "stock_moe",     Cat = Cat.Stock,    Ja = "MOEストック",           En = "MOE stock",        Source = Source.Asset },
             new Att { Id = "ext_mag",       Cat = Cat.Mag,      Ja = "拡張マガジン",          En = "Extended mag",     Source = Source.StatsOnly },
             new Att { Id = "fast_mag",      Cat = Cat.Mag,      Ja = "ファストマグ",          En = "Fast mag",         Source = Source.StatsOnly },
 
@@ -79,7 +85,7 @@ namespace FPCustom
             new Att { Id = "p_fast_mag",    Cat = Cat.Mag,      Ja = "ファストマグ",          En = "Fast mag",         Source = Source.StatsOnly, Pistol = true },
         };
 
-        public static readonly Cat[] RifleCats = { Cat.Muzzle, Cat.Grip, Cat.Sight, Cat.SideRail, Cat.Mag };
+        public static readonly Cat[] RifleCats = { Cat.Muzzle, Cat.Grip, Cat.Sight, Cat.SideRail, Cat.Stock, Cat.Mag };
         public static readonly Cat[] PistolCats = { Cat.Muzzle, Cat.Stock, Cat.Sight, Cat.SideRail, Cat.Mag };
 
         public static Att Get(string id) => All.FirstOrDefault(a => a.Id == id);
@@ -93,7 +99,9 @@ namespace FPCustom
 
         public static bool Eligible(WeaponItem wi) => wi != null && wi.Id != RpgId && FPModOption.Weapons.Released(wi.Id);
 
-        public static Cat[] CatsFor(int weaponId) => IsPistol(weaponId) ? PistolCats : RifleCats;
+        // ストックを付けられないメイン武器（バニラでストックの無い AKMS・Hunter-12・"Beater" MPS-5 と、ストックが本体と一体の武器）はストックの欄を出さない
+        static readonly Cat[] RifleCatsNoStock = { Cat.Muzzle, Cat.Grip, Cat.Sight, Cat.SideRail, Cat.Mag };
+        public static Cat[] CatsFor(int weaponId) => IsPistol(weaponId) ? PistolCats : Checked(weaponId) && RifleStocks.Fits.ContainsKey(weaponId) ? RifleCats : RifleCatsNoStock;
 
         // その武器に付けられるもの（見た目の確認が済むまでは、メイン武器用・ハンドガン用の全部）
         public static List<Att> For(int weaponId, Cat cat)
