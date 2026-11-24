@@ -98,13 +98,20 @@ namespace FPCustom
             s.Add(("sba3", () => { Set("stock_sba3"); }));
             s.Add(("sba3 check", () =>
             {
+                var dw = Active();
+                Effects.LeanOverrideForTest = true; Effects.Tick();
+                float lean = LiveScale(dw), pts = LivePts(dw);
+                Effects.LeanOverrideForTest = false; Effects.Tick();
+                float straight = LiveScale(dw);
+                Effects.LeanOverrideForTest = null;
+                Check($"SBA3: control +7 while leaning ({lean:0.000} = {Effects.ScaleForTest(pts + 7f):0.000}, not leaning {straight:0.000})", Near(lean, Effects.ScaleForTest(pts + 7f)) && Near(straight, Effects.ScaleForTest(pts)));
+                Check("SBA3: no fixed control", !Catalog.Get("stock_sba3").Effects.Any(e => e.Item1 == WeaponStat.Control));
                 Effects.MovingOverrideForTest = true; float on = AdsSpeed.ExtraErgo(Ak12);
                 Effects.MovingOverrideForTest = false; float off = AdsSpeed.ExtraErgo(Ak12);
                 Effects.MovingOverrideForTest = null;
-                Check($"SBA3: ergonomics +15 while moving ({on} vs {off})", Near(on - off, 15f));
-                Check("SBA3: control -5", Catalog.Get("stock_sba3").Effects.Any(e => e.Item1 == WeaponStat.Control && e.Item2 == -5f));
+                Check($"SBA3: no moving ergonomics ({on} vs {off})", Near(on, off));
                 float walk = Refs.Fps._movementComponent.movementSettings.walking.velocity;
-                Check($"SBA3: move speed back to normal ({walk:0.000})", Near(walk, _walkNone));
+                Check($"SBA3: move speed -7% ({walk:0.000} vs {_walkNone:0.000}, mult {Link.MoveSpeedMult()})", Near(Link.MoveSpeedMult(), 0.93f) && Near(walk, _walkNone * 0.93f));
             }));
 
             // MCX

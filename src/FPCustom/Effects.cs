@@ -45,15 +45,15 @@ namespace FPCustom
         // メイン武器のストック
         public const float PrsStillControl = 10f;    // PRS：止まっている間のコントロール
         public const float PrsMoveSpeed = 0.9f;      // PRS：移動速度
-        public const float Sba3MoveErgo = 15f;       // SBA3：歩く・走る・スライディング中のエルゴ
-        public const float Sba3Control = -5f;        // SBA3：コントロール（常に）
+        public const float Sba3LeanControl = 7f;     // SBA3：リーン中のコントロール（2026-11-24 ユーザー指定）
+        public const float Sba3MoveSpeed = 0.93f;    // SBA3：移動速度
         public const float McxReload = 1.15f;        // MCX：リロード速度
         public const float MoeReload = 0.9f;         // MOE：リロード速度
         public const float MoeTime = 10f, MoeControl = 5f, MoeErgo = 7f;   // MOE：リロードを終えてから MoeTime 秒のコントロール・エルゴ
         static readonly string[] SlowLoadStocks = { "stock_mcx", "stock_moe" };   // 弾込めのキーの弾込め速度 -80%（インベントリはゲームのまま。2026-11-23 ユーザー指定）
         public const float StockLoadSpeed = 0.2f;   // MCX・MOE：弾込め速度 -80%
         // 撃っている間・動きに合わせて反動を毎フレーム変えるもの（武器ごとの専用の複製を使う）
-        static readonly string[] LiveAtts = { "vertical_grip", "p_compensator", "muzzle_brake", "bipod", "p_wood_stock", "p_frame_stock", "kac_grip", "stock_prs", "stock_moe" };
+        static readonly string[] LiveAtts = { "vertical_grip", "p_compensator", "muzzle_brake", "bipod", "p_wood_stock", "p_frame_stock", "kac_grip", "stock_prs", "stock_sba3", "stock_moe" };
         // ポイントエイムで強く、通常のエイムで弱いもの（ワイヤーストック・KAC グリップ）
         static readonly string[] PointAtts = { "p_frame_stock", "kac_grip" };
 
@@ -107,7 +107,8 @@ namespace FPCustom
             // メイン武器のストック（元のストックと差し替える。2026-11-22 ユーザー指定）
             D("stock_prs", none, ($"静止時コントロール+{PrsStillControl:0}", $"Control +{PrsStillControl:0} while standing still", true),
                 ($"移動速度-{(1f - PrsMoveSpeed) * 100f:0}%", $"Move speed -{(1f - PrsMoveSpeed) * 100f:0}%", false));
-            D("stock_sba3", new[] { (Stat.Control, Sba3Control) }, ($"移動中エルゴノミクス+{Sba3MoveErgo:0}", $"Ergonomics +{Sba3MoveErgo:0} while moving", true));
+            D("stock_sba3", none, ($"リーン時コントロール+{Sba3LeanControl:0}", $"Control +{Sba3LeanControl:0} while leaning", true),
+                ($"移動速度-{(1f - Sba3MoveSpeed) * 100f:0}%", $"Move speed -{(1f - Sba3MoveSpeed) * 100f:0}%", false));
         string StockLoadJa = $"弾込め速度-{(1f - StockLoadSpeed) * 100f:0}%", StockLoadEn = $"Loading speed -{(1f - StockLoadSpeed) * 100f:0}%";
             D("stock_mcx", none, ("ダッシュ中にリロード可能", "Reload while sprinting", true),
                 ($"リロード速度+{(McxReload - 1f) * 100f:0}%", $"Reload speed +{(McxReload - 1f) * 100f:0}%", true), (StockLoadJa, StockLoadEn, false));
@@ -213,7 +214,6 @@ namespace FPCustom
             Link.ExtraDelta = Deltas;
             AdsSpeed.ExtraErgo = id => Deltas(id).Ergo + (Has(id, "stubby_grip") && Moving() ? StubbyMoveErgo : 0f)   // スタビーグリップ：歩く・走る・スライディング中は構えが速い
                 + (Has(id, PointAtts) ? (PointTarget(id) ? PointErgo : NormalErgo) : 0f)                        // ワイヤーストック：構える先（ポイントエイム・通常のエイム）で
-                + (Has(id, "stock_sba3") && Moving() ? Sba3MoveErgo : 0f)                                        // SBA3：移動中
                 + (MoeOn(id) ? MoeErgo : 0f);                                                                      // MOE：リロードの後
             Link.RpmShown = (id, rpm) => (Has(id, "p_stock") && Catalog.IsPistol(id) ? (id == G18C ? rpm * G18Rate : StockRpm) : Burst(id) && M16() is { } m16 ? m16.fireRate : rpm) * (Has(id, "flash_cone") ? BoosterRate : 1f);
             Link.DamageShown = (id, dmg) => dmg + DamageAdd(id);
@@ -242,7 +242,7 @@ namespace FPCustom
                 int id = Weapons.IdOf(w);
                 return (Has(id, "fast_mag", "p_fast_mag") ? FastReload : 1f) * (Has(id, "stock_mcx") ? McxReload : 1f) * (Has(id, "stock_moe") ? MoeReload : 1f);
             };
-            Link.MoveSpeedMult = () => { Active(out int id); return Has(id, "stock_prs") ? PrsMoveSpeed : 1f; };
+            Link.MoveSpeedMult = () => { Active(out int id); return (Has(id, "stock_prs") ? PrsMoveSpeed : 1f) * (Has(id, "stock_sba3") ? Sba3MoveSpeed : 1f); };
             // MCX：ダッシュ中のリロードの間は走る構えにしない（リロードのアニメーションが見える。走る速さ・画面の揺れはそのまま）
             Slide.HoldPoseWhileSprinting = () => { Active(out int id); return Reloading() && Has(id, "stock_mcx"); };
             // MOE：リロードの終わり（武器の OnActionEnded。FPRarity のリロード速度もこれを呼び直す）から MoeTime 秒
@@ -485,7 +485,7 @@ namespace FPCustom
         // 撃った弾数に合わせて毎フレーム書き換える（どちらも毎発その場で読むので、次の 1 発から効く）。
         // 撃った弾数は弾の減りで数える（キーの割り当て・パッドに関係なく）。次の弾が来ないまま連射の間隔の 2 倍がたったら、指を離した扱い
 
-        sealed class LiveRecoil { public RecoilPatternSettings Clone, Original; public RecoilAnimData AnimClone, AnimOriginal; public float Points; public bool Vgrip, Comp, Bipod, Wire, Prs, Moe; }
+        sealed class LiveRecoil { public RecoilPatternSettings Clone, Original; public RecoilAnimData AnimClone, AnimOriginal; public float Points; public bool Vgrip, Comp, Bipod, Wire, Prs, Sba3, Moe; }
         static readonly Dictionary<string, LiveRecoil> _live = new();
         static int _shots, _lastAmmo;
         static float _lastShotAt;
@@ -510,6 +510,7 @@ namespace FPCustom
             l.Bipod = Has(id, "bipod", "p_wood_stock");
             l.Wire = Has(id, PointAtts);
             l.Prs = Has(id, "stock_prs");
+            l.Sba3 = Has(id, "stock_sba3");
             l.Moe = Has(id, "stock_moe");
             SetLive(l, 0);
             return l;
@@ -521,7 +522,7 @@ namespace FPCustom
         {
             float points = l.Points + (l.Comp && shots < CompShots ? CompBonus : 0f) + (l.Bipod && Crouching ? BipodControl : 0f)
                 + (l.Wire ? Aim switch { AimKind.Point => PointControl, AimKind.Normal => NormalControl, _ => 0f } : 0f)
-                + (l.Prs && Still ? PrsStillControl : 0f) + (l.Moe && MoeNow ? MoeControl : 0f);
+                + (l.Prs && Still ? PrsStillControl : 0f) + (l.Sba3 && Leaning ? Sba3LeanControl : 0f) + (l.Moe && MoeNow ? MoeControl : 0f);
             if (!l.Vgrip || shots <= 0) return Scale(points);
             return Mathf.Min(Scale(points), StatScale.RecoilMult(points + VgripPerShot * shots));
         }
@@ -542,7 +543,7 @@ namespace FPCustom
 
         // ---------- メイン武器のストック ----------
         // PRS：止まっている間（歩く・走る・スライディング・空中でない）
-        static bool Still, MoeNow;
+        static bool Still, MoeNow, Leaning;   // Leaning：SBA3（リーン中）
         public static bool? StillOverrideForTest;
         static bool IsStill() => Refs.Fps?._movementComponent?.MovementState == Il2CppDemo.Scripts.Runtime.Character.FPSMovementState.Idle;
 
@@ -737,6 +738,7 @@ namespace FPCustom
             if (dw == null || id < 0 || !Has(id, LiveAtts) || !_live.TryGetValue(Link.Key(dw, id), out var l) || l.Clone == null || l.Original == null) { _shots = 0; return; }
             Crouching = CrouchOverrideForTest ?? IsCrouching();
             Still = StillOverrideForTest ?? IsStill();
+            Leaning = LeanOverrideForTest ?? (Refs.Fps != null && Refs.Fps._isLeaning);
             MoeNow = MoeOn(id);
             Aim = AimNow(dw);
             int ammo = dw.SelectedMag?.AmmoCount ?? 0;

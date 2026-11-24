@@ -21,6 +21,7 @@ namespace FPEndless
             TestMode.ExternalScenarios["endluck"] = LuckProbe;              // 調査：招き猫・花瓶の運の仕組み
             TestMode.ExternalScenarios["endbonus"] = BonusSteps;            // 招き猫・花瓶の運を調整に掛ける
             TestMode.ExternalScenarios["endperf"] = PerfSteps;              // 調整したランの重さ
+            FloorLootTest.Register();                                      // 調査：床・棚の戦利品にも運が効くか
             TestMode.ExternalScenarios["endmaps"] = MapSteps;               // 調査：階の種類ごとに、ゲームの何が重いか（GameProf）
         }
 
@@ -200,13 +201,13 @@ namespace FPEndless
         }
 
         // ---------- 階の種類ごとの重さ（autotest -Dev -Scenario endmaps） ----------
-        static void NoBossFloors()
+        internal static void NoBossFloors()
         {
             try { Type.GetType("FPRarity.EndlessBoss, FPRarity")?.GetField("ForceNormalForTest", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public)?.SetValue(null, true); }
             catch (Exception e) { Main.Log("[prof] boss off failed: " + e.Message); }
         }
-        static void Invincible() { try { var p = UnityEngine.Object.FindObjectsOfType<Il2CppBallistics.LivingEntity>().FirstOrDefault(e => e.PlayerHealthManager != null); if (p != null) p.PlayerHealthManager.invincible = true; } catch { } }
-        static string LevelName() { try { return string.Join(",", Core.FindAll<LevelElevator>().Select(e => $"{e.LevelBuilder?.gameObject.name}#{e.CurrentFloor}").Distinct()); } catch { return "?"; } }
+        internal static void Invincible() { try { var p = UnityEngine.Object.FindObjectsOfType<Il2CppBallistics.LivingEntity>().FirstOrDefault(e => e.PlayerHealthManager != null); if (p != null) p.PlayerHealthManager.invincible = true; } catch { } }
+        internal static string LevelName() { try { return string.Join(",", Core.FindAll<LevelElevator>().Select(e => $"{e.LevelBuilder?.gameObject.name}#{e.CurrentFloor}").Distinct()); } catch { return "?"; } }
         static List<(string, Action)> MapSteps()
         {
             var s = new List<(string, Action)>();
