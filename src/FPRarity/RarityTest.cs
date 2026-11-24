@@ -362,6 +362,31 @@ namespace FPRarity
                         Main.Log($"[test] tooltip roll={roll.Tier} rarityText='{ui.ItemRarityText?.text}' bg={bg}");
                         Main.Log($"[test] CHECK tooltip frame color = roll tier: {(ok ? "PASS" : "FAIL")}");
                     }
+                    // 武器の直後に武器以外の戦利品を見ても、レアリティの文字が武器の色のまま残らない（2026-11-24）
+                    if (upd != null && _spawned.Count > 0)
+                    {
+                        LootableItem item = null;
+                        foreach (var o in Resources.FindObjectsOfTypeAll(Il2CppInterop.Runtime.Il2CppType.Of<LootableItem>()))
+                        {
+                            var l = o.TryCast<LootableItem>();
+                            if (l != null && !l.gameObject.scene.IsValid() && l.ItemType != LootableItem.LootType.Weapon) { item = l; break; }
+                        }
+                        var fps = Main.FindAll<Il2CppDemo.Scripts.Runtime.Character.FPSController>().FirstOrDefault();
+                        if (item != null && fps != null)
+                        {
+                            var go = UnityEngine.Object.Instantiate(item.gameObject, fps.transform.position + fps.transform.forward * 4, Quaternion.identity);
+                            _spawned.Add(go);
+                            var wli = _spawned[0].GetComponentInChildren<LootableItem>();
+                            upd.Invoke(ui, new object[] { new Interactable(wli.Pointer) });
+                            var wc = ui.ItemRarityText.color;
+                            upd.Invoke(ui, new object[] { new Interactable(go.GetComponentInChildren<LootableItem>().Pointer) });
+                            var ic = ui.ItemRarityText.color; var v = UiPatches.RarityTextColorForTest;
+                            bool same = v != null && Mathf.Abs(ic.r - v.Value.r) < 0.01f && Mathf.Abs(ic.g - v.Value.g) < 0.01f && Mathf.Abs(ic.b - v.Value.b) < 0.01f;
+                            Main.Log($"[test] rarity text: weapon {wc}, then item '{item.gameObject.name}' '{ui.ItemRarityText.text}' {ic}, game color {v}");
+                            Main.Log($"[test] CHECK item tooltip rarity text back to the game color after a weapon: {(same ? "PASS" : "FAIL")}");
+                        }
+                        else Main.Log("[test] CHECK item tooltip rarity text back to the game color after a weapon: FAIL (no item prefab)");
+                    }
                     foreach (var go in _spawned) UnityEngine.Object.Destroy(go);
                 }),
 

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -101,6 +101,9 @@ namespace FPRarity
         public static long TooltipUiTicks, TooltipUiCalls;   // テスト用の計測
         public static bool SkipTooltipUi;                     // テスト用
 
+        static Color? _rarityTextColor;   // ゲームの元の文字色（最初に見たときの色）
+        public static Color? RarityTextColorForTest => _rarityTextColor;
+
         static void UpdateTooltip_Post(UserInteractions __instance, Interactable interactable)
         {
             if (SkipTooltipUi) return;
@@ -110,6 +113,13 @@ namespace FPRarity
             {
                 var li = interactable?.TryCast<LootableItem>();
                 var r = li == null ? null : Tracker.GroundRoll(li);
+                // ゲームはレアリティの文字の色を塗らない（枠だけ）。武器で塗った色が戦利品に残らないよう、武器以外は元の色に戻す（2026-11-24）
+                var rt = __instance.ItemRarityText;
+                if (rt != null)
+                {
+                    if (_rarityTextColor == null) _rarityTextColor = rt.color;
+                    if (r == null && rt.color != _rarityTextColor.Value) rt.color = _rarityTextColor.Value;
+                }
                 if (r == null) return;
                 if (__instance.ItemRarityText != null)
                 {
